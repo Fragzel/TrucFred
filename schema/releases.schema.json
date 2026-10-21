@@ -1,0 +1,347 @@
+{
+  "$defs": {
+    "Artist": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "Artist",
+      "type": "object"
+    },
+    "Cover": {
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "platform": {
+          "enum": [
+            "spotify",
+            "soundcloud"
+          ],
+          "title": "Platform",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "platform"
+      ],
+      "title": "Cover",
+      "type": "object"
+    },
+    "Link": {
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "enum": [
+            "spotify",
+            "soundcloud"
+          ],
+          "title": "Platform",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "album",
+            "ep",
+            "single",
+            "track"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "date": {
+          "title": "Date",
+          "type": "string"
+        },
+        "precision": {
+          "enum": [
+            "year",
+            "month",
+            "day"
+          ],
+          "title": "Precision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "platform",
+        "url",
+        "type",
+        "date",
+        "precision"
+      ],
+      "title": "Link",
+      "type": "object"
+    },
+    "Release": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "edition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Edition"
+        },
+        "type": {
+          "enum": [
+            "album",
+            "ep",
+            "single",
+            "track"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "type_inferred": {
+          "default": false,
+          "title": "Type Inferred",
+          "type": "boolean"
+        },
+        "artists": {
+          "items": {
+            "$ref": "#/$defs/Artist"
+          },
+          "title": "Artists",
+          "type": "array"
+        },
+        "date": {
+          "title": "Date",
+          "type": "string"
+        },
+        "precision": {
+          "enum": [
+            "year",
+            "month",
+            "day"
+          ],
+          "title": "Precision",
+          "type": "string"
+        },
+        "sort_date": {
+          "format": "date",
+          "title": "Sort Date",
+          "type": "string"
+        },
+        "first_seen": {
+          "format": "date-time",
+          "title": "First Seen",
+          "type": "string"
+        },
+        "backfill": {
+          "title": "Backfill",
+          "type": "boolean"
+        },
+        "tracks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tracks"
+        },
+        "cover": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cover"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "links": {
+          "items": {
+            "$ref": "#/$defs/Link"
+          },
+          "title": "Links",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "type",
+        "artists",
+        "date",
+        "precision",
+        "sort_date",
+        "first_seen",
+        "backfill",
+        "links"
+      ],
+      "title": "Release",
+      "type": "object"
+    },
+    "Rules": {
+      "additionalProperties": false,
+      "properties": {
+        "new_days": {
+          "title": "New Days",
+          "type": "integer"
+        },
+        "new_max_age_days": {
+          "title": "New Max Age Days",
+          "type": "integer"
+        },
+        "stale_hours": {
+          "title": "Stale Hours",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "new_days",
+        "new_max_age_days",
+        "stale_hours"
+      ],
+      "title": "Rules",
+      "type": "object"
+    },
+    "SourceSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "ok",
+                "partial",
+                "error",
+                "auth_expired"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message"
+        },
+        "last_success_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Success At"
+        },
+        "followed": {
+          "default": 0,
+          "title": "Followed",
+          "type": "integer"
+        }
+      },
+      "title": "SourceSummary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "timezone": {
+      "title": "Timezone",
+      "type": "string"
+    },
+    "window_days": {
+      "title": "Window Days",
+      "type": "integer"
+    },
+    "rules": {
+      "$ref": "#/$defs/Rules"
+    },
+    "sources": {
+      "additionalProperties": {
+        "$ref": "#/$defs/SourceSummary"
+      },
+      "title": "Sources",
+      "type": "object"
+    },
+    "aliases": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Aliases",
+      "type": "object"
+    },
+    "releases": {
+      "items": {
+        "$ref": "#/$defs/Release"
+      },
+      "title": "Releases",
+      "type": "array"
+    }
+  },
+  "required": [
+    "generated_at",
+    "timezone",
+    "window_days",
+    "rules",
+    "sources",
+    "releases"
+  ],
+  "title": "ReleasesFile",
+  "type": "object"
+}

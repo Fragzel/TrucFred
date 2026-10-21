@@ -1,0 +1,20 @@
+# Configuration publique de newrel. Aucun secret ici : ils vivent dans les secrets GitHub
+# (ou dans .env.local pour les runs locaux, fichier ignoré par git).
+
+[general]
+timezone = "Europe/Paris"    # fuseau des dates affichées et du « aujourd'hui »
+window_days = 90             # profondeur d'historique affichée
+new_days = 7                 # badge « Nouveau » : détectée il y a au plus N jours…
+new_max_age_days = 14        # … et sortie il y a au plus N jours
+stale_hours = 36             # bannière sur la page si les données ont plus de N heures
+followings_drop_ratio = 0.3  # chute d'abonnements au-delà de laquelle la liste reçue est ignorée
+token_warn_days = 150        # avertissement : le refresh token Spotify expire à 6 mois
+token_error_days = 170       # run rouge peu avant l'expiration
+
+[spotify]
+market = "FR"
+groups = ["album", "single"]  # ni featurings (appears_on) ni compilations
+max_pages = 5
+requests_per_second = 2.0
+time_budget_minutes = 15
+max_retry_after_seconds = 120

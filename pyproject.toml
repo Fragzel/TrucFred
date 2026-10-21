@@ -1,0 +1,40 @@
+[project]
+name = "newrel"
+version = "0.1.0"
+description = "Agrégateur des nouvelles sorties des artistes suivis (Spotify, puis SoundCloud)"
+requires-python = ">=3.14"
+dependencies = [
+    "httpx>=0.28.1",
+    "pydantic>=2.14.1",
+    "tzdata>=2026.5 ; sys_platform == 'win32'",
+]
+
+[project.scripts]
+newrel = "newrel.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.4,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "respx>=0.23.1",
+    "ruff>=0.17.1",
+]
+
+[tool.uv]
+# Le dépôt vit dans OneDrive : on copie les paquets dans .venv au lieu de créer des liens
+# durs vers le cache d'uv, que la synchronisation pourrait altérer.
+link-mode = "copy"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+allowed-confusables = ["’", "–", "—", "×"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

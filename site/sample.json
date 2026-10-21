@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-22T04:21:07Z",
+  "timezone": "Europe/Paris",
+  "window_days": 90,
+  "rules": {
+    "new_days": 7,
+    "new_max_age_days": 14,
+    "stale_hours": 36
+  },
+  "sources": {
+    "spotify": {
+      "status": "ok",
+      "message": null,
+      "last_success_at": "2026-10-22T04:21:07Z",
+      "followed": 148
+    }
+  },
+  "aliases": {},
+  "releases": [
+    {
+      "id": "r_5a1e0c0001",
+      "title": "Lumières froides",
+      "edition": null,
+      "type": "single",
+      "type_inferred": false,
+      "artists": [{"id": "a_5a1e0c0a01", "name": "Nora Velasco"}],
+      "date": "2026-10-16",
+      "precision": "day",
+      "sort_date": "2026-10-16",
+      "first_seen": "2026-10-16T04:19:44Z",
+      "backfill": false,
+      "tracks": 1,
+      "cover": null,
+      "links": [
+        {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleLumieresFroides", "type": "single", "date": "2026-10-16", "precision": "day"}
+      ]
+    },
+    {
+      "id": "r_5a1e0c0002",
+      "title": "Basse saison",
+      "edition": null,
+      "type": "ep",
+      "type_inferred": true,
+      "artists": [{"id": "a_5a1e0c0a02", "name": "Les Marées Hautes"}],
+      "date": "2026-10-16",
+      "precision": "day",
+      "sort_date": "2026-10-16",
+      "first_seen": "2026-10-16T04:19:44Z",
+      "backfill": false,
+      "tracks": 5,
+      "cover": null,
+      "links": [
+        {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleBasseSaison", "type": "ep", "date": "2026-10-16", "precision": "day"}
+      ]
+    },
+    {
+      "id": "r_5a1e0c0003",
+      "title": "Night Shift (Deluxe Edition)",
+      "edition": "Deluxe Edition",
+      "type": "album",
+      "type_inferred": false,
+      "artists": [
+        {"id": "a_5a1e0c0a03", "name": "Kaito Mori"},
+        {"id": "a_5a1e0c0a04", "name": "Sœur Lune"}
+      ],
+      "date": "2026-10-10",
+      "precision": "day",
+      "sort_date": "2026-10-10",
+      "first_seen": "2026-10-10T04:22:31Z",
+      "backfill": false,
+      "tracks": 14,
+      "cover": null,
+      "links": [
+        {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleNightShift", "type": "album", "date": "2026-10-10", "precision": "day"}
+      ]
+    },
+    {
+      "id": "r_5a1e0c0004",
+      "title": "Tout doux",
+      "edition": null,
+      "type": "single",
+      "type_inferred": false,
+      "artists": [{"id": "a_5a1e0c0a05", "name": "Amel Rami"}],
+      "date": "2026-10-09",
+      "precision": "day",
+      "sort_date": "2026-10-09",
+      "first_seen": "2026-10-09T04:18:09Z",
+      "backfill": false,
+      "tracks": 1,
+      "cover": null,
+      "links": [
+        {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleToutDoux", "type": "single", "date": "2026-10-09", "precision": "day"}
+      ]
+    },
+    {
+      "id": "r_5a1e0c0005",
+      "title": "Archives perdues",
+      "edition": null,
+      "type": "album",
+      "type_inferred": false,
+      "artists": [{"id": "a_5a1e0c0a02", "name": "Les Marées Hautes"}],
+      "date": "2026",
+      "precision": "year",
+      "sort_date": "2026-10-03",
+      "first_seen": "2026-10-03T04:20:11Z",
+      "backfill": false,
+      "tracks": 9,
+      "cover": null,
+      "links": [
+        {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleArchivesPerdues", "type": "album", "date": "2026", "precision": "year"}
+      ]
+    },
+    {
+      "id": "r_5a1e0c0006",
+      "title": "Échos",
+      "edition": null,
+      "type": "album",
+      "type_inferred": false,
+      "artists": [{"id": "a_5a1e0c0a01", "name": "Nora Velasco"}],
+      "date": "2026-09-26",
+      "precision": "day",
+      "sort_date": "2026-09-26",
+      "first_seen": "2026-10-01T04:18:02Z",
+      "backfill": true,
+      "tracks": 11,
+      "cover": null,
+      "links": [
+        {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleEchos", "type": "album", "date": "2026-09-26", "precision": "day"}
+      ]
+    },
+    {
+      "id": "r_5a1e0c0007",
+      "title": "Ghosts in the Static",
+      "edition": null,
+      "type": "single",
+      "type_inferred": false,
+      "artists": [{"id": "a_5a1e0c0a03", "name": "Kaito Mori"}],
+      "date": "2026-09-12",
+      "precision": "day",
+      "sort_date": "2026-09-12",
+      "first_seen": "2026-10-01T04:18:02Z",
+      "backfill": true,
+      "tracks": 1,
+      "cover": null,
+      "links": [
+        {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleGhosts", "type": "single", "date": "2026-09-12", "precision": "day"}
+      ]
+    }
+  ]
+}

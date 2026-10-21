@@ -1,0 +1,13 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Générés : site assemblé et worktree de la branche data
+/_site/
+/data/
+
+# Secrets locaux (uv run newrel auth spotify --write-env)
+.env.local

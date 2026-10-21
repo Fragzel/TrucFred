@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="color-scheme" content="light dark">
+    <title>Nouvelles sorties</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%B5%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="style.css">
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <header class="top">
+      <div class="title-row">
+        <h1>Nouvelles sorties</h1>
+        <p id="meta" class="meta"></p>
+      </div>
+      <div id="notices" role="status"></div>
+      <form id="filters" class="filters" role="search">
+        <input id="q" type="search" placeholder="Artiste ou titre" aria-label="Rechercher un artiste ou un titre" autocomplete="off">
+        <fieldset id="platforms" class="chips" hidden><legend>Plateformes</legend></fieldset>
+        <fieldset id="types" class="chips" hidden><legend>Types</legend></fieldset>
+        <label class="toggle"><input id="new-only" type="checkbox"> Nouveautés seulement</label>
+        <button id="reset" type="button" class="reset">Réinitialiser</button>
+      </form>
+    </header>
+
+    <main>
+      <p id="empty" class="empty" hidden></p>
+      <div id="list"></div>
+    </main>
+
+    <footer class="foot">
+      Données fournies par <a href="https://open.spotify.com" rel="noopener">Spotify</a>.
+      Page personnelle : chaque sortie renvoie vers sa plateforme d'origine.
+    </footer>
+
+    <template id="tpl-week">
+      <section class="week">
+        <header class="week-head"><h2></h2><span class="count"></span></header>
+        <ul class="grid"></ul>
+      </section>
+    </template>
+
+    <template id="tpl-card">
+      <li class="card">
+        <a class="cover" target="_blank" rel="noopener"></a>
+        <div class="body">
+          <p class="badges"><span class="type"></span><span class="new" hidden>Nouveau</span></p>
+          <h3 class="title"></h3>
+          <p class="artists"></p>
+          <p class="details"><time class="date"></time><span class="tracks"></span></p>
+          <p class="links"></p>
+        </div>
+      </li>
+    </template>
+  </body>
+</html>

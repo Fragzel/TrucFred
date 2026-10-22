@@ -214,6 +214,8 @@ def main(argv: list[str] | None = None) -> int:
         stream.reconfigure(errors="replace")
     args = _parser().parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+    # httpx journalise chaque requête en INFO : une ligne par appel dans les logs publics.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     if not IN_ACTIONS:
         load_env_file(Path(".env.local"), os.environ)
     try:

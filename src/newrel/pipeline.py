@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 
 from newrel import releases as releases_file
 from newrel import site
-from newrel.config import Config
+from newrel.config import Aliases, Config
 from newrel.models import ReleasesFile, SourceItem, State
 from newrel.sources import SOURCES
 from newrel.sources.base import SourceResult, SourceSpec
@@ -59,6 +59,7 @@ def run(
     accept_drop: bool = False,
     now: datetime | None = None,
     sources: Mapping[str, SourceSpec] | None = None,
+    aliases: Aliases | None = None,
 ) -> RunOutcome:
     now = (now or datetime.now(UTC)).replace(microsecond=0)
     sources = SOURCES if sources is None else sources
@@ -123,7 +124,9 @@ def run(
 
     state_written = not offline and bool(configured)
     generated_at = now if state_written else _last_update(state, now)
-    data = releases_file.build(state, config, generated_at=generated_at, now=now)
+    data = releases_file.build(
+        state, config, generated_at=generated_at, now=now, artist_aliases=aliases
+    )
     payload = data.model_dump_json(indent=2) + "\n"
     if state_written:
         save_state(state, state_path)

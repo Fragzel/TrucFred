@@ -1,7 +1,9 @@
-"""Configuration publique (config.toml) et secrets locaux (.env.local)."""
+"""Configuration publique (config.toml, aliases.toml) et secrets locaux (.env.local)."""
 
 from __future__ import annotations
 
+import getpass
+import os
 import tomllib
 from collections.abc import MutableMapping
 from dataclasses import dataclass, field, fields, replace
@@ -34,6 +36,19 @@ class SpotifyConfig:
 
 
 @dataclass(frozen=True)
+class SoundCloudConfig:
+    exclude: tuple[str, ...] = ()
+    """Comptes suivis à ignorer (URN ou nom de profil dans l'URL) : labels, amis, curateurs…"""
+    requests_per_second: float = 1.5
+    tracks_limit: int = 20
+    playlists_limit: int = 10
+    max_pages: int = 3
+    time_budget_minutes: float = 15.0
+    max_retry_after_seconds: float = 120.0
+    full_check_days: int = 30
+
+
+@dataclass(frozen=True)
 class Config:
     timezone: str = "Europe/Paris"
     window_days: int = 90
@@ -44,15 +59,27 @@ class Config:
     token_warn_days: int = 150
     token_error_days: int = 170
     spotify: SpotifyConfig = field(default_factory=SpotifyConfig)
+    soundcloud: SoundCloudConfig = field(default_factory=SoundCloudConfig)
+
+
+@dataclass(frozen=True)
+class Aliases:
+    """aliases.toml : décisions manuelles sur l'identité des artistes entre plateformes."""
+
+    same: tuple[frozenset[str], ...] = ()
+    """Groupes d'identifiants (spotify:artist:…, soundcloud:users:…) désignant un même artiste."""
+    never: tuple[frozenset[str], ...] = ()
+    """Paires d'homonymes à ne jamais fusionner."""
 
 
 def _section[T](cls: type[T], values: dict[str, Any], name: str) -> T:
-    allowed = {f.name for f in fields(cls)} - {"spotify"}
+    allowed = {f.name for f in fields(cls)} - {"spotify", "soundcloud"}
     unknown = sorted(set(values) - allowed)
     if unknown:
         raise ConfigError(f"[{name}] clé(s) inconnue(s) : {', '.join(unknown)}")
-    if "groups" in values:
-        values = {**values, "groups": tuple(values["groups"])}
+    for key in ("groups", "exclude"):
+        if key in values:
+            values = {**values, key: tuple(values[key])}
     return cls(**values)
 
 
@@ -64,7 +91,7 @@ def load_config(path: Path) -> Config:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"{path} : {exc}") from exc
-    unknown = sorted(set(data) - {"general", "spotify"})
+    unknown = sorted(set(data) - {"general", "spotify", "soundcloud"})
     if unknown:
         raise ConfigError(f"{path} : section(s) inconnue(s) : {', '.join(unknown)}")
 
@@ -72,12 +99,53 @@ def load_config(path: Path) -> Config:
     bad_groups = sorted(set(spotify.groups) - SPOTIFY_GROUPS)
     if bad_groups or not spotify.groups:
         raise ConfigError(f"[spotify] groups invalides : {', '.join(bad_groups) or 'liste vide'}")
-    config = replace(_section(Config, data.get("general", {}), "general"), spotify=spotify)
+    soundcloud = _section(SoundCloudConfig, data.get("soundcloud", {}), "soundcloud")
+    general = _section(Config, data.get("general", {}), "general")
+    config = replace(general, spotify=spotify, soundcloud=soundcloud)
     try:
         ZoneInfo(config.timezone)
     except (ZoneInfoNotFoundError, ValueError) as exc:
         raise ConfigError(f"[general] fuseau horaire inconnu : {config.timezone}") from exc
     return config
+
+
+def load_aliases(path: Path) -> Aliases:
+    """Lit aliases.toml : des listes [[same]] et [[never]] avec chacune une clé « keys »."""
+    if not path.exists():
+        return Aliases()
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"{path} : {exc}") from exc
+    groups: dict[str, tuple[frozenset[str], ...]] = {}
+    for section in ("same", "never"):
+        entries = data.pop(section, [])
+        if not all(
+            isinstance(entry.get("keys"), list) and len(entry["keys"]) >= 2 for entry in entries
+        ):
+            raise ConfigError(
+                f"{path} : chaque [[{section}]] doit avoir keys = [au moins 2 identifiants]"
+            )
+        groups[section] = tuple(frozenset(entry["keys"]) for entry in entries)
+    if data:
+        raise ConfigError(f"{path} : section(s) inconnue(s) : {', '.join(sorted(data))}")
+    return Aliases(same=groups["same"], never=groups["never"])
+
+
+def ask_env(name: str, *, hidden: bool = False, prompt: str | None = None) -> str:
+    """Valeur prise dans l'environnement, sinon demandée au terminal (masquée pour un secret)."""
+    value = os.environ.get(name, "").strip()
+    while not value:
+        value = (getpass.getpass if hidden else input)(f"{prompt or name} : ").strip()
+    return value
+
+
+def update_env_file(path: Path, values: dict[str, str]) -> None:
+    """Écrit ou remplace des lignes KEY=VALUE dans un fichier local (ignoré par git)."""
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    kept = [line for line in lines if line.split("=", 1)[0].strip() not in values]
+    text = "\n".join([*kept, *(f"{key}={value}" for key, value in values.items())]) + "\n"
+    path.write_text(text, encoding="utf-8")
 
 
 def load_env_file(path: Path, environ: MutableMapping[str, str]) -> None:

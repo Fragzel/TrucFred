@@ -12,7 +12,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from newrel import __version__, dates, pipeline, site
-from newrel.config import ConfigError, load_config, load_env_file
+from newrel.config import ConfigError, load_aliases, load_config, load_env_file
 from newrel.models import State, releases_schema
 from newrel.sources import SOURCES
 from newrel.state import context_for, load_state
@@ -51,6 +51,7 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="accepte une forte baisse du nombre d'abonnements",
     )
+    run.add_argument("--aliases", type=Path, default=Path("aliases.toml"))
 
     fetch = commands.add_parser("fetch", help="interroge une source à blanc, sans rien écrire")
     fetch.add_argument("source", choices=sorted(SOURCES))
@@ -63,10 +64,11 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     auth = commands.add_parser(
-        "auth", help="autorisation OAuth locale (Spotify : tous les ~6 mois)"
+        "auth", help="mise en route d'une source (Spotify : à refaire tous les ~6 mois)"
     )
-    auth.add_argument("source", choices=["spotify"])
-    auth.add_argument("--port", type=int, default=8888)
+    auth.add_argument("source", choices=["spotify", "soundcloud"])
+    auth.add_argument("--port", type=int, default=8888, help="Spotify : port du retour OAuth")
+    auth.add_argument("--profile", help="SoundCloud : adresse de ton profil soundcloud.com")
     auth.add_argument("--no-gh", action="store_true", help="n'enregistre pas les secrets avec gh")
     auth.add_argument("--repo", help="dépôt GitHub cible (par défaut : celui du dossier courant)")
     auth.add_argument(
@@ -132,6 +134,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         env=os.environ,
         offline=args.offline,
         accept_drop=args.accept_drop,
+        aliases=load_aliases(args.aliases),
     )
     for report in outcome.reports:
         label = LABELS.get(report.platform, report.platform)
@@ -190,9 +193,13 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
 
 
 def _cmd_auth(args: argparse.Namespace) -> int:
+    env_file = Path(".env.local") if args.write_env else None
+    if args.source == "soundcloud":
+        from newrel.sources.soundcloud_auth import setup
+
+        return setup(profile=args.profile, use_gh=not args.no_gh, repo=args.repo, env_file=env_file)
     from newrel.sources.spotify_auth import authorize
 
-    env_file = Path(".env.local") if args.write_env else None
     return authorize(port=args.port, use_gh=not args.no_gh, repo=args.repo, env_file=env_file)
 
 

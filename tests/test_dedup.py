@@ -2,7 +2,15 @@ from datetime import UTC, datetime
 
 import pytest
 
-from newrel.dedup import cluster, release_id, split_title
+from newrel.config import Aliases
+from newrel.dedup import (
+    artist_id,
+    artist_name_key,
+    canonical_artists,
+    cluster,
+    release_id,
+    split_title,
+)
 from newrel.models import ItemArtist, LinkState, SourceItem
 
 SEEN = datetime(2026, 10, 22, tzinfo=UTC)
@@ -94,6 +102,66 @@ def test_regles_entre_plateformes() -> None:
         ["soundcloud:tracks:t", "spotify:album:s"],
         ["spotify:album:a"],
     ]
+
+
+@pytest.mark.parametrize(
+    ("title", "names", "key"),
+    [
+        ("Nora Velasco - Lumières froides", ["Nora Velasco"], "lumieresfroides"),
+        ("NORA VELASCO – Lumières froides [Free DL]", ["Nora Velasco Official"], "lumieresfroides"),
+        ("Lumières froides (Clip officiel)", [], "lumieresfroides"),
+        ("Autre Artiste - Lumières froides", ["Nora Velasco"], "autreartistelumieresfroides"),
+    ],
+)
+def test_titres_soundcloud(title: str, names: list[str], key: str) -> None:
+    assert split_title(title, names)[0] == key
+
+
+@pytest.mark.parametrize(
+    ("name", "key"),
+    [
+        ("Nora Velasco", "noravelasco"),
+        ("Nora Velasco Official", "noravelasco"),
+        ("noravelascomusic", "noravelasco"),
+        ("The Marées Hautes", "mareeshautes"),
+        ("Bigflo et Oli", "bigflooli"),
+        ("Bigflo & Oli", "bigflooli"),
+    ],
+)
+def test_cle_de_nom_d_artiste(name: str, key: str) -> None:
+    assert artist_name_key(name) == key
+
+
+def test_artistes_reunis_entre_plateformes_sauf_homonymes_ou_refus() -> None:
+    names = {
+        "spotify:artist:A1": "Nora Velasco",
+        "soundcloud:users:10": "Nora Velasco Official",
+        "spotify:artist:K1": "Kid",
+        "spotify:artist:K2": "Kid",  # deux « Kid » sur Spotify : ambigu
+        "soundcloud:users:20": "kid",
+    }
+    canonical = canonical_artists(names)
+    assert (
+        canonical["soundcloud:users:10"]
+        == canonical["spotify:artist:A1"]
+        == artist_id("spotify:artist:A1")
+    )
+    assert (
+        len(
+            {
+                canonical[key]
+                for key in ("spotify:artist:K1", "spotify:artist:K2", "soundcloud:users:20")
+            }
+        )
+        == 3
+    )
+    never = Aliases(never=(frozenset({"spotify:artist:A1", "soundcloud:users:10"}),))
+    assert canonical_artists(names, never)["soundcloud:users:10"] != artist_id("spotify:artist:A1")
+    same = Aliases(same=(frozenset({"spotify:artist:K1", "soundcloud:users:20"}),))
+    forced = canonical_artists(names, same)
+    assert (
+        forced["soundcloud:users:20"] == forced["spotify:artist:K1"] != forced["spotify:artist:K2"]
+    )
 
 
 def test_identifiant_de_sortie_stable() -> None:

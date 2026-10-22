@@ -45,6 +45,8 @@ class SourceItem(Model):
     precision: Precision
     tracks: int | None = None
     cover: str | None = None
+    parent: str | None = None
+    """Album ou EP SoundCloud qui contient ce son : la carte de l'album le couvre."""
 
 
 class FollowedArtist(Model):

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from newrel import dates
-from newrel.config import ConfigError, load_config, load_env_file
+from newrel.config import Aliases, ConfigError, load_aliases, load_config, load_env_file
 from newrel.models import ReleasesFile, releases_schema
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,6 +34,30 @@ def test_config_invalide_refusee(tmp_path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
     with pytest.raises(ConfigError):
         load_config(path)
+
+
+def test_config_soundcloud_et_aliases_du_depot() -> None:
+    config = load_config(ROOT / "config.toml")
+    assert config.soundcloud.exclude == ()
+    assert load_aliases(ROOT / "aliases.toml") == Aliases()
+
+
+def test_aliases(tmp_path: Path) -> None:
+    path = tmp_path / "aliases.toml"
+    path.write_text(
+        '[[same]]\nkeys = ["spotify:artist:A", "soundcloud:users:1"]\n'
+        '[[never]]\nkeys = ["spotify:artist:B", "soundcloud:users:2"]\n',
+        encoding="utf-8",
+    )
+    aliases = load_aliases(path)
+    assert aliases.same == (frozenset({"spotify:artist:A", "soundcloud:users:1"}),)
+    assert aliases.never == (frozenset({"spotify:artist:B", "soundcloud:users:2"}),)
+    path.write_text('[[same]]\nkeys = ["spotify:artist:A"]\n', encoding="utf-8")
+    with pytest.raises(ConfigError):
+        load_aliases(path)
+    path.write_text("[autre]\nx = 1\n", encoding="utf-8")
+    with pytest.raises(ConfigError):
+        load_aliases(path)
 
 
 def test_env_local_n_ecrase_pas_l_environnement(tmp_path: Path) -> None:

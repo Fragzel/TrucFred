@@ -153,7 +153,7 @@ Le job qui exécute les dépendances Python n'a aucun droit d'écriture sur le r
 
 ### 2.3 Collecte
 
-Chaque source a son propre débit. Spotify est pour l'instant la seule ; à l'étape 2, les deux sources tourneront en parallèle.
+Chaque source a son propre débit. Elles sont collectées l'une après l'autre : Spotify, limité par son quota, prend moins d'une minute, ce qui rend le parallélisme inutile pour l'instant.
 
 **Spotify** : un budget de 90 appels catalogue par run (révision du 22/10/2026).
 - Quota mesuré au premier run réel : `QUOTA_EXCEEDED` après 100 appels catalogue, avec `Retry-After : 86111 s`. Le Development Mode autorise donc environ **100 appels catalogue par 24 h**, partagés par toutes les apps du compte développeur.
@@ -283,7 +283,7 @@ Sorties (comparées seulement entre artistes fusionnés) :
   - un album ne fusionne avec une autre sortie que si le nombre de titres est identique, pour ne pas le confondre avec son single titre.
 - Au sein de Spotify seul, on fusionne les versions explicit et clean d'une même sortie (même titre, même date, même nombre de titres).
 - La carte fusionnée garde :
-  - la date la plus précise, ou la plus ancienne à précision égale ;
+  - la date de Spotify si elle est précise au jour : un son publié la veille sur SoundCloud ne doit pas faire changer de semaine une sortie du vendredi. Sinon, la plus précise, ou la plus ancienne à précision égale ;
   - le titre et la pochette de Spotify par défaut ;
   - les liens de toutes les plateformes.
 
@@ -472,6 +472,13 @@ Au-delà d'environ 1 000 artistes, on ne vérifierait plus qu'une fois par semai
   - une entrée `never_merge` empêche une fusion abusive ;
   - les sons d'un nouvel album SoundCloud sont rattachés à la carte de l'album ;
   - si SoundCloud tombe, Spotify est publié quand même, les données SoundCloud du run précédent restent affichées avec la bannière, et le run passe au rouge au 2e échec.
+
+**Statut (22/10)** : code terminé et testé contre un faux service SoundCloud (fusion avec Spotify, `[[never]]`, sons rattachés à leur album, comptes suivis refusés). Écarts par rapport au plan :
+- l'URN de ton compte est une variable du dépôt, `SOUNDCLOUD_USER_URN`, et non une clé de `config.toml` ;
+- un compte dont le nombre de sons et de playlists n'a pas bougé ne coûte aucun appel ;
+- le test préalable est intégré à `uv run newrel auth soundcloud`.
+
+Il reste à créer l'app (Artist Pro), lancer cette commande, puis valider sur tes vraies données.
 
 ### Étape 3 : améliorations (indépendantes, dans cet ordre)
 

@@ -1,0 +1,13 @@
+# Décisions manuelles sur l'identité des artistes entre plateformes.
+#
+# Par défaut, un artiste qui porte le même nom (normalisé) sur Spotify et SoundCloud est considéré
+# comme une seule personne, sauf homonymes. Les identifiants à utiliser figurent dans state.json
+# (branche data), sous « artists ».
+#
+# Même artiste sous deux noms différents :
+# [[same]]
+# keys = ["spotify:artist:4Z8W4fKeB5YxbusRsdQVPb", "soundcloud:users:12345678"]
+#
+# Homonymes à ne jamais fusionner :
+# [[never]]
+# keys = ["spotify:artist:0OdUWJ0sBjDrqHygGUXeCF", "soundcloud:users:87654321"]

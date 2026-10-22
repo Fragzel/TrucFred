@@ -1,8 +1,9 @@
 # TrucFred : nouvelles sorties des artistes suivis
 
-Une page web qui liste les nouvelles sorties (albums, EP, singles) des artistes que je suis sur
-Spotify, triées par semaine de sortie, avec un lien vers chaque plateforme. SoundCloud arrive à
-l'étape 2 du [plan](docs/PLAN.md).
+Une page web qui liste les nouvelles sorties (albums, EP, singles, nouveaux sons) des artistes
+que je suis sur Spotify et SoundCloud, triées par semaine de sortie, avec un lien vers chaque
+plateforme. Une sortie présente sur les deux plateformes n'occupe qu'une carte. Voir le
+[plan](docs/PLAN.md).
 
 - **Collecte** : un workflow GitHub Actions planifié (tous les jours vers 6 h 17, heure de Paris)
   lance `newrel`, un script Python.
@@ -26,9 +27,19 @@ l'étape 2 du [plan](docs/PLAN.md).
      variable `SPOTIFY_AUTHORIZED_AT`, dans le dépôt via `gh`.
    - Ajoute `--write-env` pour écrire aussi ces valeurs dans `.env.local` (ignoré par git), qui
      sert aux runs locaux.
-4. **Premier run** : `gh workflow run update.yml`, ou attendre le passage du lendemain matin.
-   - Faute de branche `data`, ce premier run démarre à zéro : tout ce qu'il trouve est classé
-     comme historique (pas de badge « Nouveau »).
+4. **App SoundCloud** : sur <https://soundcloud.com/you/apps>, crée une app. Il faut un
+   abonnement **Artist Pro**. Si le formulaire demande une redirect URI, mets
+   `http://127.0.0.1:8899/callback` (elle ne sert pas aujourd'hui).
+5. **Mise en route SoundCloud** : `uv run newrel auth soundcloud`.
+   - Le script demande le Client ID, le Client Secret et l'adresse de ton profil
+     (`https://soundcloud.com/…`).
+   - Il vérifie que l'API laisse lire tes comptes suivis avec un simple jeton d'application. Il
+     n'y a aucune autorisation à donner, car tes abonnements SoundCloud sont publics.
+   - Il enregistre ensuite les secrets `SOUNDCLOUD_CLIENT_ID` et `SOUNDCLOUD_CLIENT_SECRET`,
+     ainsi que la variable `SOUNDCLOUD_USER_URN`. L'option `--write-env` marche aussi.
+6. **Premier run** : `gh workflow run update.yml`, ou attendre le passage du lendemain matin.
+   - Une plateforme qui n'a encore jamais été lue démarre à zéro : tout ce qu'elle trouve est
+     classé comme historique (pas de badge « Nouveau »).
    - Les vraies nouveautés apparaissent à partir du run suivant.
 
 ## Commandes
@@ -38,7 +49,9 @@ l'étape 2 du [plan](docs/PLAN.md).
 | `uv run newrel fetch spotify` | Interroge Spotify à blanc et liste les sorties trouvées, sans rien écrire. Limité à 10 appels catalogue (`--budget N` pour changer), pris sur le quota quotidien du workflow |
 | `uv run newrel run` | Run complet en local : état dans `data/`, site dans `_site/` |
 | `uv run newrel serve` | Sert le site sur <http://127.0.0.1:8000>, avec les données de `data/` ou, à défaut, `site/sample.json` |
+| `uv run newrel fetch soundcloud` | Interroge SoundCloud à blanc, sans rien écrire |
 | `uv run newrel auth spotify` | Ré-autorise Spotify (voir le runbook) |
+| `uv run newrel auth soundcloud` | Vérifie l'accès SoundCloud et enregistre secrets et URN |
 | `uv run newrel schema` | Régénère `schema/releases.schema.json` après une modification de `models.py` |
 
 Tests et qualité :
@@ -75,6 +88,24 @@ l'étoile renvoie la sortie là où elle était : « Déjà vus » si elle avait
   « Exporter » puis « Importer » en bas de page. L'import fusionne sans rien effacer.
 - **Fusions** : quand deux sorties sont fusionnées (par exemple la même sortie trouvée sur deux
   plateformes), leurs marques suivent automatiquement, grâce aux `aliases` de `releases.json`.
+
+## Doublons entre plateformes
+
+- **Une seule carte.** Une sortie présente à la fois sur Spotify et sur SoundCloud n'occupe qu'une
+  carte, avec un lien par plateforme. Il faut pour cela le même artiste, le même titre normalisé
+  et des dates proches de 7 jours au plus.
+- **Titres.** La normalisation retire un préfixe « Artiste - », ainsi que les mentions comme
+  `[Free DL]`, `(Clip officiel)` ou `(feat. …)`.
+- **Date affichée.** C'est celle de Spotify quand elle est précise au jour.
+- **Artistes.** Un même nom normalisé sur les deux plateformes désigne le même artiste :
+  « Nora Velasco Official » sur SoundCloud et « Nora Velasco » sur Spotify, par exemple.
+  - Si un nom correspond à plusieurs comptes sur une même plateforme (homonymes), rien n'est
+    fusionné automatiquement.
+  - `aliases.toml` permet de forcer une fusion (`[[same]]`) ou de l'interdire (`[[never]]`).
+- **Albums SoundCloud.** Les sons d'un album ou d'un EP SoundCloud sont couverts par la carte de
+  l'album.
+- **Coût SoundCloud.** La liste de tes comptes suivis donne leur nombre de sons et de playlists.
+  Un compte dont ces compteurs n'ont pas bougé ne coûte aucun appel.
 
 ## Quota Spotify
 

@@ -5,8 +5,10 @@ from pathlib import Path
 import pytest
 
 from newrel import pipeline
+from newrel.config import Aliases
 from newrel.sources.base import SourceResult, SourceSpec
-from tests.helpers import CONFIG, ENV, NOW, SOURCES
+from tests.helpers import CONFIG, ENV, NOW, SC_ENV, SOURCES
+from tests.soundcloud_fake import sc_playlist, sc_track, sc_user
 from tests.spotify_fake import album
 
 SITE_DIR = Path(__file__).resolve().parents[1] / "site"
@@ -232,6 +234,48 @@ def test_jumeaux_explicit_clean_fusionnes(tmp_path, fake_spotify) -> None:
     assert [release["title"] for release in data["releases"]] == ["Nuit blanche"]
     assert len(data["aliases"]) == 1
     assert list(data["aliases"].values()) == [data["releases"][0]["id"]]
+
+
+@pytest.fixture
+def same_release_twice(fake_spotify, fake_soundcloud):
+    """« Lumières froides » de Nora Velasco, sur Spotify et sur SoundCloud (préfixe et suffixe)."""
+    fake_spotify.follow(("A1", "Nora Velasco"))
+    single = album("s1", "Lumières froides", "2026-10-16", artists=(("A1", "Nora Velasco"),))
+    fake_spotify.publish("A1", "single", single)
+    user = sc_user(10, "Nora Velasco Official", permalink="noravelasco")
+    fake_soundcloud.follow(user)
+    title = "Nora Velasco - Lumières froides [Free DL]"
+    fake_soundcloud.upload(user, sc_track(5, title, "2026/10/15 10:00:00 +0000", user))
+    return fake_spotify, fake_soundcloud
+
+
+def test_meme_sortie_sur_deux_plateformes_une_seule_carte(tmp_path, same_release_twice) -> None:
+    run(tmp_path, env=ENV | SC_ENV)
+    releases = published(tmp_path)["releases"]
+    assert [release["title"] for release in releases] == ["Lumières froides"]
+    assert [link["platform"] for link in releases[0]["links"]] == ["spotify", "soundcloud"]
+    assert len(releases[0]["artists"]) == 1  # Nora Velasco, une seule fois
+    assert releases[0]["date"] == "2026-10-16"  # la date Spotify, plus sûre qu'un upload
+    assert set(published(tmp_path)["sources"]) == {"spotify", "soundcloud"}
+
+
+def test_homonymes_declares_jamais_fusionnes(tmp_path, same_release_twice) -> None:
+    never = Aliases(never=(frozenset({"spotify:artist:A1", "soundcloud:users:10"}),))
+    run(tmp_path, env=ENV | SC_ENV, aliases=never)
+    titles = [release["title"] for release in published(tmp_path)["releases"]]
+    assert sorted(titles) == ["Lumières froides", "Nora Velasco - Lumières froides [Free DL]"]
+
+
+def test_album_soundcloud_couvre_ses_sons(tmp_path, fake_soundcloud) -> None:
+    user = sc_user(10, "Nora Velasco", permalink="noravelasco")
+    fake_soundcloud.follow(user)
+    tracks = tuple(sc_track(n, f"Titre {n}", "2026/10/16 08:00:00 +0000", user) for n in (1, 2))
+    fake_soundcloud.upload(user, *tracks)
+    album_ = sc_playlist(7, "Échos", "2026/10/16 09:00:00 +0000", user, tracks=tracks)
+    fake_soundcloud.publish(user, album_)
+    run(tmp_path, env=SC_ENV)
+    releases = published(tmp_path)["releases"]
+    assert [(release["title"], release["type"]) for release in releases] == [("Échos", "album")]
 
 
 def test_resultat_d_une_source_sans_artistes_verifies(tmp_path) -> None:

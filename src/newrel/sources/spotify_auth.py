@@ -6,9 +6,7 @@ rafraîchissement). La redirection arrive sur un petit serveur local en 127.0.0.
 
 from __future__ import annotations
 
-import getpass
 import http.server
-import os
 import secrets
 import time
 import urllib.parse
@@ -17,6 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from newrel import github
+from newrel.config import ask_env
 from newrel.http import HttpClient
 from newrel.sources.spotify import SpotifyApi
 
@@ -27,13 +26,6 @@ _PAGE = (
     '<!doctype html><html lang="fr"><meta charset="utf-8"><title>newrel</title>'
     '<body style="font-family:system-ui;margin:3rem;font-size:1.2rem">{}</body></html>'
 )
-
-
-def _ask(name: str, *, hidden: bool = False) -> str:
-    value = os.environ.get(name, "").strip()
-    while not value:
-        value = (getpass.getpass if hidden else input)(f"{name} : ").strip()
-    return value
 
 
 def _wait_for_code(port: int, expected_state: str, url: str) -> str:
@@ -79,17 +71,11 @@ def _wait_for_code(port: int, expected_state: str, url: str) -> str:
     return outcome["code"]
 
 
-def _update_env_file(path: Path, values: dict[str, str]) -> None:
-    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    kept = [line for line in lines if line.split("=", 1)[0].strip() not in values]
-    path.write_text("\n".join([*kept, *(f"{k}={v}" for k, v in values.items())]) + "\n", "utf-8")
-
-
 def authorize(
     *, port: int = 8888, use_gh: bool = True, repo: str | None = None, env_file: Path | None = None
 ) -> int:
-    client_id = _ask("SPOTIFY_CLIENT_ID")
-    client_secret = _ask("SPOTIFY_CLIENT_SECRET", hidden=True)
+    client_id = ask_env("SPOTIFY_CLIENT_ID")
+    client_secret = ask_env("SPOTIFY_CLIENT_SECRET", hidden=True)
     redirect_uri = f"http://127.0.0.1:{port}/callback"
     state = secrets.token_urlsafe(24)
     query = {
@@ -125,28 +111,14 @@ def authorize(
     else:
         print("Rotation : aucun nouveau refresh token émis, le token reste réutilisable.")
 
-    values = {
-        "SPOTIFY_CLIENT_ID": client_id,
-        "SPOTIFY_CLIENT_SECRET": client_secret,
-        "SPOTIFY_REFRESH_TOKEN": refresh_token,
-    }
-    status = 0
-    if use_gh and not github.available():
-        print("gh introuvable : enregistre les secrets à la main (voir README).")
-        status = 1
-    elif use_gh:
-        saved = [github.set_secret(name, value, repo=repo) for name, value in values.items()]
-        saved.append(github.set_variable("SPOTIFY_AUTHORIZED_AT", authorized_at, repo=repo))
-        if all(saved):
-            print(
-                f"Secrets Spotify et variable SPOTIFY_AUTHORIZED_AT ({authorized_at}) enregistrés."
-            )
-        else:
-            print(
-                "Échec de l'enregistrement via gh : vérifie « gh auth status » et le dépôt ciblé."
-            )
-            status = 1
-    if env_file:
-        _update_env_file(env_file, {**values, "SPOTIFY_AUTHORIZED_AT": authorized_at})
-        print(f"Valeurs écrites dans {env_file} (ignoré par git) pour les runs locaux.")
-    return status
+    return github.save_settings(
+        secrets={
+            "SPOTIFY_CLIENT_ID": client_id,
+            "SPOTIFY_CLIENT_SECRET": client_secret,
+            "SPOTIFY_REFRESH_TOKEN": refresh_token,
+        },
+        variables={"SPOTIFY_AUTHORIZED_AT": authorized_at},
+        use_gh=use_gh,
+        repo=repo,
+        env_file=env_file,
+    )

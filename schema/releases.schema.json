@@ -288,6 +288,37 @@
           "default": 0,
           "title": "Unchecked",
           "type": "integer"
+        },
+        "checked_last_run": {
+          "default": 0,
+          "title": "Checked Last Run",
+          "type": "integer"
+        },
+        "oldest_check_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Oldest Check At"
+        },
+        "quota_reset_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quota Reset At"
         }
       },
       "title": "SourceSummary",

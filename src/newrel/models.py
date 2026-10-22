@@ -65,6 +65,7 @@ class SourceState(Model):
     followings_at: datetime | None = None
     quota_reset_at: datetime | None = None
     """Quota épuisé : aucun appel catalogue avant cette date (indiquée par Retry-After)."""
+    checked_last_run: int = 0
 
 
 class ArtistState(Model):
@@ -143,6 +144,10 @@ class SourceSummary(Model):
     followed: int = 0
     unchecked: int = 0
     """Artistes suivis jamais vérifiés (montée en charge, quota oblige)."""
+    checked_last_run: int = 0
+    oldest_check_at: datetime | None = None
+    """Vérification la plus ancienne parmi les artistes suivis : le « retard » maximal."""
+    quota_reset_at: datetime | None = None
 
 
 class Rules(Model):

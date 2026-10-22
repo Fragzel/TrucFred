@@ -15,6 +15,7 @@ from newrel.models import (
     Release,
     ReleasesFile,
     Rules,
+    SourceState,
     SourceSummary,
     State,
 )
@@ -48,18 +49,27 @@ def build(state: State, config: Config, *, generated_at: datetime, now: datetime
             new_max_age_days=config.new_max_age_days,
             stale_hours=config.stale_hours,
         ),
-        sources={
-            name: SourceSummary(
-                status=source.status,
-                message=source.message,
-                last_success_at=source.last_success_at,
-                followed=len(source.followings),
-                unchecked=sum(artist.key not in state.artists for artist in source.followings),
-            )
-            for name, source in sorted(state.sources.items())
-        },
+        sources={name: _summary(source, state) for name, source in sorted(state.sources.items())},
         aliases=dict(sorted(aliases.items())),
         releases=releases,
+    )
+
+
+def _summary(source: SourceState, state: State) -> SourceSummary:
+    checks = [
+        state.artists[artist.key].last_checked_at
+        for artist in source.followings
+        if artist.key in state.artists
+    ]
+    return SourceSummary(
+        status=source.status,
+        message=source.message,
+        last_success_at=source.last_success_at,
+        followed=len(source.followings),
+        unchecked=len(source.followings) - len(checks),
+        checked_last_run=source.checked_last_run,
+        oldest_check_at=min(checks, default=None),
+        quota_reset_at=source.quota_reset_at,
     )
 
 

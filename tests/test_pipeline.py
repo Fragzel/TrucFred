@@ -63,6 +63,9 @@ def test_premier_run_tout_en_historique(tmp_path, one_artist) -> None:
         "last_success_at": "2026-10-22T04:17:00Z",
         "followed": 1,
         "unchecked": 0,
+        "checked_last_run": 1,
+        "oldest_check_at": "2026-10-22T04:17:00Z",
+        "quota_reset_at": None,
     }
 
 
@@ -74,7 +77,10 @@ def test_quota_epuise_memorise_d_un_run_a_l_autre(tmp_path, one_artist) -> None:
     calls = one_artist.catalog_calls
     run(tmp_path, now=NOW + timedelta(hours=1))  # blocage en cours : aucun appel catalogue
     assert one_artist.catalog_calls == calls
-    assert "quota épuisé jusqu'au 23/10" in published(tmp_path)["sources"]["spotify"]["message"]
+    spotify_summary = published(tmp_path)["sources"]["spotify"]
+    assert "quota épuisé jusqu'au 23/10" in spotify_summary["message"]
+    assert spotify_summary["quota_reset_at"] == "2026-10-23T04:12:11Z"
+    assert spotify_summary["checked_last_run"] == 0
     one_artist.quota = None
     run(tmp_path, now=NOW + DAY)  # Retry-After écoulé : la collecte reprend
     assert published(tmp_path)["sources"]["spotify"]["unchecked"] == 0

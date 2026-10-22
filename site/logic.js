@@ -120,6 +120,7 @@ export function notices(data, now) {
         platform,
         status: source.status,
         message: source.message ?? "",
+        quotaResetAt: source.quota_reset_at ?? null,
       });
     } else if (sinceSuccess > limit) {
       result.push({ kind: "source-stale", level: "warning", platform, hours: Math.floor(sinceSuccess / HOUR_MS) });

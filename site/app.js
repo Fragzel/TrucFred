@@ -46,6 +46,10 @@ function duration(hours) {
 
 function noticeText(notice) {
   const name = PLATFORM_LABELS[notice.platform] ?? notice.platform;
+  if (notice.quotaResetAt && Date.parse(notice.quotaResetAt) > page.now.getTime()) {
+    const resume = stampFormat.format(new Date(notice.quotaResetAt));
+    return `${name} : quota du jour épuisé, la vérification des artistes reprendra le ${resume}.`;
+  }
   if (notice.kind === "stale") {
     return `Données vieilles de ${duration(notice.hours)} : la mise à jour quotidienne ne tourne plus (onglet Actions du dépôt).`;
   }
@@ -60,16 +64,40 @@ function noticeText(notice) {
   return `${name} : ${state ?? notice.status}${notice.message ? ` (${notice.message})` : ""}.`;
 }
 
+// Spotify (Development Mode) n'accepte qu'environ 100 requêtes de catalogue par jour : chaque
+// mise à jour ne vérifie qu'une partie des artistes, à tour de rôle. On l'explique sur la page.
+function rotationText(platform, source) {
+  if (platform !== "spotify" || !source.followed) return "";
+  const s = (count) => (count > 1 ? "s" : "");
+  const parts = [
+    "Spotify limite l'accès à environ 100 requêtes par jour : les artistes sont vérifiés à tour de rôle.",
+  ];
+  if (source.checked_last_run) {
+    parts.push(`Dernière mise à jour : ${plural(source.checked_last_run, "artiste")} vérifié${s(source.checked_last_run)}.`);
+  }
+  if (source.oldest_check_at) {
+    const hours = Math.max(0, Math.floor((page.now.getTime() - Date.parse(source.oldest_check_at)) / 3_600_000));
+    parts.push(`Le moins récent l'a été il y a ${duration(hours)}.`);
+  }
+  if (source.unchecked) {
+    parts.push(`${source.unchecked} pas encore vérifié${s(source.unchecked)} (premiers jours).`);
+  }
+  return parts.join(" ");
+}
+
 function renderHeader() {
   const { data } = page;
   const parts = [`Mis à jour le ${stampFormat.format(new Date(data.generated_at))}`];
+  const rotation = [];
   for (const [platform, source] of Object.entries(data.sources)) {
     const followed = `${plural(source.followed, "artiste")} suivi${source.followed > 1 ? "s" : ""}`;
-    // Quota Spotify : les premiers jours, une partie des artistes n'a pas encore été vérifiée.
-    const pending = source.unchecked ? `, dont ${source.unchecked} pas encore vérifié${source.unchecked > 1 ? "s" : ""}` : "";
-    parts.push(`${PLATFORM_LABELS[platform] ?? platform} : ${followed}${pending}`);
+    parts.push(`${PLATFORM_LABELS[platform] ?? platform} : ${followed}`);
+    rotation.push(rotationText(platform, source));
   }
   $("#meta").textContent = parts.join(" · ");
+  const rotationLine = $("#rotation");
+  rotationLine.textContent = rotation.filter(Boolean).join(" ");
+  rotationLine.hidden = !rotationLine.textContent;
   $("#notices").replaceChildren(
     ...notices(data, page.now).map((notice) => {
       const paragraph = document.createElement("p");

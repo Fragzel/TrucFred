@@ -75,6 +75,7 @@ def apply_result(state: State, result: SourceResult, *, now: datetime, cutoff: d
     if result.status == "ok" or result.checked:
         source.last_success_at = now
     source.quota_reset_at = result.quota_reset_at
+    source.checked_last_run = len(result.checked)
 
     if result.followings is not None:
         followed = {artist.key for artist in result.followings}

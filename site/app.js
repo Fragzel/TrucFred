@@ -15,6 +15,7 @@ import {
   parseMarks,
   releasesForTab,
   tabCounts,
+  tabOf,
   toggleFavorite,
   toggleSeen,
 } from "./logic.js";
@@ -229,12 +230,12 @@ function card(release, fresh) {
   }
 
   const seen = Boolean(page.marks.seen[release.id]);
+  const favorite = Boolean(page.marks.fav[release.id]);
   const seenButton = node.querySelector(".mark-seen");
   seenButton.setAttribute("aria-pressed", String(seen));
   seenButton.textContent = seen ? "✓ Vu" : "Déjà vu";
   seenButton.title = seen ? "Remettre dans « À découvrir »" : "Ranger dans « Déjà vus »";
-  seenButton.hidden = Boolean(release.archived);
-  const favorite = Boolean(page.marks.fav[release.id]);
+  seenButton.hidden = favorite; // un favori ne vit que dans l'onglet « Favoris »
   const star = node.querySelector(".mark-fav");
   star.setAttribute("aria-pressed", String(favorite));
   star.textContent = favorite ? "★" : "☆";
@@ -330,9 +331,13 @@ function onCardClick(event) {
   const release = findRelease(button.closest(".card").dataset.id);
   if (!release) return;
   if (button.classList.contains("mark-fav")) {
-    const adding = !page.marks.fav[release.id];
     const { archived, ...snapshot } = release;
-    applyMarks(toggleFavorite(page.marks, snapshot, new Date()), adding ? null : `« ${release.title} » retiré des favoris.`);
+    const marks = toggleFavorite(page.marks, snapshot, new Date());
+    const destination = { todo: "« À découvrir »", seen: "« Déjà vus »" }[tabOf(release.id, marks)];
+    const message = marks.fav[release.id]
+      ? `« ${release.title} » rangé dans « Favoris ».`
+      : `« ${release.title} » retiré des favoris${archived ? "" : `, de retour dans ${destination}`}.`;
+    applyMarks(marks, message);
     return;
   }
   const seen = Boolean(page.marks.seen[release.id]);

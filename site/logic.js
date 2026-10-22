@@ -165,21 +165,30 @@ export function toggleFavorite(marks, release, now) {
   return { ...marks, fav };
 }
 
+/** Onglet d'une sortie : chacune n'apparaît que dans un seul. Un favori prime sur « déjà vu ». */
+export function tabOf(id, marks) {
+  if (marks.fav[id]) return "fav";
+  return marks.seen[id] ? "seen" : "todo";
+}
+
 /** Sorties d'un onglet. Les favoris sortis de la fenêtre reviennent depuis leur copie. */
 export function releasesForTab(releases, marks, tab) {
-  if (tab === "seen") return releases.filter((release) => marks.seen[release.id]);
   if (tab === "fav") {
     const current = new Map(releases.map((release) => [release.id, release]));
     return Object.entries(marks.fav).map(
       ([id, entry]) => current.get(id) ?? { ...entry.release, id, archived: true },
     );
   }
-  return releases.filter((release) => !marks.seen[release.id]);
+  return releases.filter((release) => tabOf(release.id, marks) === tab);
 }
 
 export function tabCounts(releases, marks) {
-  const seen = releases.filter((release) => marks.seen[release.id]).length;
-  return { todo: releases.length - seen, seen, fav: Object.keys(marks.fav).length };
+  const counts = { todo: 0, seen: 0, fav: Object.keys(marks.fav).length };
+  for (const release of releases) {
+    const tab = tabOf(release.id, marks);
+    if (tab !== "fav") counts[tab] += 1;
+  }
+  return counts;
 }
 
 /** Problèmes à signaler en haut de page : données périmées, source en panne ou partielle. */

@@ -59,7 +59,10 @@ git worktree add data origin/data
 
 ## Déjà vu et favoris
 
-La page a trois onglets : « À découvrir », « Déjà vus » et « Favoris ».
+La page a trois onglets : « À découvrir », « Déjà vus » et « Favoris ». Chaque sortie
+n'apparaît que dans un seul d'entre eux, et un favori ne s'affiche que dans « Favoris ». Retirer
+l'étoile renvoie la sortie là où elle était : « Déjà vus » si elle avait été marquée vue,
+« À découvrir » sinon.
 
 - **Ranger une sortie** : le bouton « Déjà vu » d'une carte la déplace dans « Déjà vus ».
   Recliquer dessus la remet dans « À découvrir ». « Tout marquer comme vu » range d'un coup

@@ -17,6 +17,7 @@ import {
   releaseWeek,
   releasesForTab,
   tabCounts,
+  tabOf,
   toggleFavorite,
   toggleSeen,
 } from "../../site/logic.js";
@@ -127,6 +128,20 @@ test("favori : visible dans son onglet, même hors fenêtre de 90 jours", () => 
   assert.deepEqual(favorites.map((r) => [r.id, Boolean(r.archived)]), [["ancien", true], ["a", false]]);
   assert.equal(favorites[0].title, "Vieux tube");
   assert.deepEqual(toggleFavorite(marks, kept, NOW).fav.ancien, undefined);
+});
+
+test("chaque sortie n'apparaît que dans un seul onglet, le favori l'emporte", () => {
+  const releases = [release({ id: "a" }), release({ id: "b" }), release({ id: "c" })];
+  let marks = toggleSeen(emptyMarks(), ["a", "b"], NOW);
+  marks = toggleFavorite(marks, releases[0], NOW); // vu et favori
+  marks = toggleFavorite(marks, releases[2], NOW); // favori jamais marqué vu
+  const ids = (tab) => releasesForTab(releases, marks, tab).map((r) => r.id);
+  assert.deepEqual([ids("todo"), ids("seen"), ids("fav")], [[], ["b"], ["a", "c"]]);
+  assert.deepEqual(tabCounts(releases, marks), { todo: 0, seen: 1, fav: 2 });
+  assert.deepEqual([tabOf("a", marks), tabOf("b", marks), tabOf("c", marks)], ["fav", "seen", "fav"]);
+  // Sans l'étoile, chacun retourne là où il était : « a » dans les vus, « c » à découvrir.
+  marks = toggleFavorite(toggleFavorite(marks, releases[0], NOW), releases[2], NOW);
+  assert.deepEqual([ids("todo"), ids("seen"), ids("fav")], [["c"], ["a", "b"], []]);
 });
 
 test("marques : lecture tolérante, fusion de sorties et import", () => {

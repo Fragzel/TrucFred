@@ -37,7 +37,7 @@ def test_quota_epuise_sans_nouvel_essai() -> None:
     body = {"error": {"status": 429, "message": "Too many requests", "reason": "QUOTA_EXCEEDED"}}
     respx.get(URL).mock(return_value=httpx.Response(429, headers={"Retry-After": "1"}, json=body))
     client, sleeps = client_with_sleeps()
-    with pytest.raises(RateLimited, match="QUOTA_EXCEEDED"):
+    with pytest.raises(RateLimited, match=r"QUOTA_EXCEEDED, Retry-After : 1 s"):
         client.request("GET", URL)
     assert sleeps == []
 

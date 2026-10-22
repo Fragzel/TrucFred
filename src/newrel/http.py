@@ -111,7 +111,10 @@ class HttpClient:
                 continue
             if response.status_code == 429:
                 if _quota_exceeded(response):
-                    raise RateLimited("quota épuisé (QUOTA_EXCEEDED)", 429)
+                    # La fenêtre du quota n'est pas documentée : on garde l'indice du serveur.
+                    hint = response.headers.get("Retry-After")
+                    detail = f", Retry-After : {hint} s" if hint else ", sans Retry-After"
+                    raise RateLimited(f"quota épuisé (QUOTA_EXCEEDED{detail})", 429)
                 wait = _retry_after(response)
                 if wait > self._max_retry_after or attempt >= self._retries:
                     raise RateLimited(

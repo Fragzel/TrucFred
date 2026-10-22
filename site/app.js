@@ -216,8 +216,13 @@ function card(release, fresh) {
   if (release.type_inferred) type.title = "Type déduit du nombre de titres";
   node.querySelector(".new").hidden = !fresh;
   node.querySelector(".archived").hidden = !release.archived;
-  node.querySelector(".title").textContent = release.title;
-  node.querySelector(".artists").textContent = release.artists.map((artist) => artist.name).join(", ");
+  // Titre et artistes sont tronqués sur les petites cartes : le texte complet reste au survol.
+  const title = node.querySelector(".title");
+  title.textContent = release.title;
+  title.title = release.title;
+  const artists = node.querySelector(".artists");
+  artists.textContent = release.artists.map((artist) => artist.name).join(", ");
+  artists.title = artists.textContent;
   const date = node.querySelector(".date");
   date.textContent = releaseDate(release);
   date.dateTime = release.date;
@@ -227,7 +232,9 @@ function card(release, fresh) {
     const anchor = document.createElement("a");
     Object.assign(anchor, { className: `platform platform-${link.platform}`, href: safeUrl(link.url), target: "_blank", rel: "noopener" });
     anchor.innerHTML = ICONS[link.platform] ?? "";
-    anchor.append(document.createTextNode(`Écouter sur ${PLATFORM_LABELS[link.platform] ?? link.platform}`));
+    const platform = PLATFORM_LABELS[link.platform] ?? link.platform;
+    anchor.setAttribute("aria-label", `Écouter « ${release.title} » sur ${platform}`);
+    anchor.append(document.createTextNode(platform));
     links.append(anchor);
   }
 

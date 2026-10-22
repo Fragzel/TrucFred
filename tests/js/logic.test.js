@@ -2,15 +2,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  emptyMarks,
   fold,
   formatHash,
   groupByWeek,
   isNew,
   localDay,
   matches,
+  mergeMarks,
+  migrateMarks,
   notices,
   parseHash,
+  parseMarks,
   releaseWeek,
+  releasesForTab,
+  tabCounts,
+  toggleFavorite,
+  toggleSeen,
 } from "../../site/logic.js";
 
 const RULES = { new_days: 7, new_max_age_days: 14, stale_hours: 36 };
@@ -27,7 +35,7 @@ const release = (overrides = {}) => ({
   links: [{ platform: "spotify" }],
   ...overrides,
 });
-const noFilter = { query: "", platforms: null, types: null, newOnly: false };
+const noFilter = { tab: "todo", query: "", platforms: null, types: null, newOnly: false };
 
 test("la semaine de sortie commence le vendredi", () => {
   assert.equal(releaseWeek("2026-10-16"), "2026-10-16"); // vendredi
@@ -75,10 +83,17 @@ test("regroupement par semaine, la plus récente d'abord", () => {
   );
 });
 
-test("filtres ⇄ hash d'URL", () => {
-  const filters = { query: "nuit blanche", platforms: new Set(["spotify"]), types: new Set(["single", "ep"]), newOnly: true };
+test("onglet et filtres ⇄ hash d'URL", () => {
+  const filters = {
+    tab: "fav",
+    query: "nuit blanche",
+    platforms: new Set(["spotify"]),
+    types: new Set(["single", "ep"]),
+    newOnly: true,
+  };
   const back = parseHash(formatHash(filters));
   assert.deepEqual({ ...back, platforms: [...back.platforms], types: [...back.types] }, {
+    tab: "fav",
     query: "nuit blanche",
     platforms: ["spotify"],
     types: ["ep", "single"],
@@ -86,6 +101,42 @@ test("filtres ⇄ hash d'URL", () => {
   });
   assert.equal(formatHash(noFilter), "");
   assert.deepEqual(parseHash(""), noFilter);
+  assert.equal(parseHash("#tab=inconnu").tab, "todo");
+});
+
+test("déjà vu : la sortie change d'onglet, et revient si on décoche", () => {
+  const releases = [release({ id: "a" }), release({ id: "b" })];
+  let marks = toggleSeen(emptyMarks(), "a", NOW);
+  assert.deepEqual(releasesForTab(releases, marks, "todo").map((r) => r.id), ["b"]);
+  assert.deepEqual(releasesForTab(releases, marks, "seen").map((r) => r.id), ["a"]);
+  assert.deepEqual(tabCounts(releases, marks), { todo: 1, seen: 1, fav: 0 });
+  marks = toggleSeen(marks, "a", NOW);
+  assert.deepEqual(tabCounts(releases, marks), { todo: 2, seen: 0, fav: 0 });
+});
+
+test("tout marquer : un lot partiellement vu devient entièrement vu", () => {
+  const marks = toggleSeen(toggleSeen(emptyMarks(), "a", NOW), ["a", "b"], NOW);
+  assert.deepEqual(Object.keys(marks.seen).sort(), ["a", "b"]);
+  assert.deepEqual(toggleSeen(marks, ["a", "b"], NOW).seen, {});
+});
+
+test("favori : visible dans son onglet, même hors fenêtre de 90 jours", () => {
+  const kept = release({ id: "ancien", title: "Vieux tube" });
+  const marks = toggleFavorite(toggleFavorite(emptyMarks(), kept, NOW), release({ id: "a" }), NOW);
+  const favorites = releasesForTab([release({ id: "a" })], marks, "fav");
+  assert.deepEqual(favorites.map((r) => [r.id, Boolean(r.archived)]), [["ancien", true], ["a", false]]);
+  assert.equal(favorites[0].title, "Vieux tube");
+  assert.deepEqual(toggleFavorite(marks, kept, NOW).fav.ancien, undefined);
+});
+
+test("marques : lecture tolérante, fusion de sorties et import", () => {
+  assert.deepEqual(parseMarks("{abîmé"), emptyMarks());
+  assert.deepEqual(parseMarks(null), emptyMarks());
+  assert.deepEqual(parseMarks('{"version": 2, "seen": {}, "fav": {}}'), emptyMarks());
+  const marks = toggleSeen(emptyMarks(), "r_ancien", NOW);
+  assert.deepEqual(Object.keys(migrateMarks(marks, { r_ancien: "r_nouveau" }).seen), ["r_nouveau"]);
+  const merged = mergeMarks(toggleSeen(emptyMarks(), "a", NOW), toggleSeen(emptyMarks(), "b", NOW));
+  assert.deepEqual(Object.keys(merged.seen).sort(), ["a", "b"]);
 });
 
 test("bannières : données périmées et source en difficulté", () => {

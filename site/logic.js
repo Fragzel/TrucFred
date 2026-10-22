@@ -82,11 +82,12 @@ export function groupByWeek(releases) {
   return weeks;
 }
 
-/** Hash d'URL → filtres. */
+/** Hash d'URL → onglet et filtres. */
 export function parseHash(hash) {
   const params = new URLSearchParams(String(hash ?? "").replace(/^#/, ""));
   const set = (key) => (params.has(key) ? new Set(params.get(key).split(",").filter(Boolean)) : null);
   return {
+    tab: TABS.includes(params.get("tab")) ? params.get("tab") : "todo",
     query: params.get("q") ?? "",
     platforms: set("p"),
     types: set("t"),
@@ -94,15 +95,91 @@ export function parseHash(hash) {
   };
 }
 
-/** Filtres → hash d'URL ("" quand rien n'est filtré). */
+/** Onglet et filtres → hash d'URL ("" pour l'onglet par défaut sans filtre). */
 export function formatHash(filters) {
   const params = new URLSearchParams();
+  if (filters.tab && filters.tab !== "todo") params.set("tab", filters.tab);
   if (filters.query) params.set("q", filters.query);
   if (filters.platforms) params.set("p", [...filters.platforms].sort().join(","));
   if (filters.types) params.set("t", [...filters.types].sort().join(","));
   if (filters.newOnly) params.set("new", "1");
   const text = params.toString();
   return text ? `#${text}` : "";
+}
+
+// --- Marques « déjà vu » et favoris -------------------------------------------------------------
+// Gardées dans le navigateur (localStorage) : propres à un navigateur, transférables par
+// export/import. Un favori garde une copie de la sortie pour survivre à la fenêtre de 90 jours.
+
+export const TABS = ["todo", "seen", "fav"];
+
+export function emptyMarks() {
+  return { version: 1, seen: {}, fav: {} };
+}
+
+/** Marques lues depuis le stockage ; un contenu absent ou abîmé donne des marques vides. */
+export function parseMarks(text) {
+  try {
+    const data = JSON.parse(text);
+    const isMap = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+    if (data?.version === 1 && isMap(data.seen) && isMap(data.fav)) {
+      return { version: 1, seen: { ...data.seen }, fav: { ...data.fav } };
+    }
+  } catch {
+    // contenu illisible : on repart de zéro plutôt que de bloquer la page
+  }
+  return emptyMarks();
+}
+
+/** Reporte les marques d'une sortie fusionnée (ancien identifiant) sur son identifiant actuel. */
+export function migrateMarks(marks, aliases) {
+  const move = (bucket) =>
+    Object.fromEntries(Object.entries(bucket).map(([id, value]) => [aliases?.[id] ?? id, value]));
+  return { ...marks, seen: move(marks.seen), fav: move(marks.fav) };
+}
+
+/** Fusionne des marques importées avec les marques existantes (rien n'est retiré). */
+export function mergeMarks(current, imported) {
+  return {
+    version: 1,
+    seen: { ...imported.seen, ...current.seen },
+    fav: { ...imported.fav, ...current.fav },
+  };
+}
+
+export function toggleSeen(marks, ids, now) {
+  const seen = { ...marks.seen };
+  const list = [ids].flat();
+  const allSeen = list.every((id) => seen[id]);
+  for (const id of list) {
+    if (allSeen) delete seen[id];
+    else seen[id] ??= now.toISOString();
+  }
+  return { ...marks, seen };
+}
+
+export function toggleFavorite(marks, release, now) {
+  const fav = { ...marks.fav };
+  if (fav[release.id]) delete fav[release.id];
+  else fav[release.id] = { at: now.toISOString(), release };
+  return { ...marks, fav };
+}
+
+/** Sorties d'un onglet. Les favoris sortis de la fenêtre reviennent depuis leur copie. */
+export function releasesForTab(releases, marks, tab) {
+  if (tab === "seen") return releases.filter((release) => marks.seen[release.id]);
+  if (tab === "fav") {
+    const current = new Map(releases.map((release) => [release.id, release]));
+    return Object.entries(marks.fav).map(
+      ([id, entry]) => current.get(id) ?? { ...entry.release, id, archived: true },
+    );
+  }
+  return releases.filter((release) => !marks.seen[release.id]);
+}
+
+export function tabCounts(releases, marks) {
+  const seen = releases.filter((release) => marks.seen[release.id]).length;
+  return { todo: releases.length - seen, seen, fav: Object.keys(marks.fav).length };
 }
 
 /** Problèmes à signaler en haut de page : données périmées, source en panne ou partielle. */

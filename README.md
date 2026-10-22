@@ -57,6 +57,22 @@ git fetch origin data
 git worktree add data origin/data
 ```
 
+## Déjà vu et favoris
+
+La page a trois onglets : « À découvrir », « Déjà vus » et « Favoris ».
+
+- **Ranger une sortie** : le bouton « Déjà vu » d'une carte la déplace dans « Déjà vus ».
+  Recliquer dessus la remet dans « À découvrir ». « Tout marquer comme vu » range d'un coup
+  toutes les sorties affichées, et chaque action peut être annulée pendant quelques secondes.
+- **Favoris** : l'étoile d'une carte l'ajoute aux favoris. Un favori garde une copie de la
+  sortie, il reste donc visible même après sa sortie de la fenêtre de 90 jours (badge
+  « Archive »).
+- **Stockage** : les marques sont enregistrées dans le navigateur (localStorage). Elles ne sont
+  pas synchronisées entre appareils, faute de serveur. Pour les transférer, utilise
+  « Exporter » puis « Importer » en bas de page. L'import fusionne sans rien effacer.
+- **Fusions** : quand deux sorties sont fusionnées (par exemple la même sortie trouvée sur deux
+  plateformes), leurs marques suivent automatiquement, grâce aux `aliases` de `releases.json`.
+
 ## Quota Spotify
 
 En Development Mode, le catalogue Spotify accepte environ **100 appels par 24 h**. Ce chiffre a

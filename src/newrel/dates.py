@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import calendar
 import re
-from datetime import date
+from datetime import date, timedelta
 
 from newrel.models import Precision
 
@@ -44,6 +44,21 @@ def normalize(value: str | None, precision: str | None) -> tuple[str, Precision]
                 return None
             return value, candidate
     return None
+
+
+def historical(
+    value: str, precision: Precision, seen_day: date, baseline: bool, max_age_days: int
+) -> bool:
+    """Sortie de catalogue, sans badge « Nouveau » : trouvée au premier passage sur un artiste
+    alors qu'elle avait déjà plus de max_age_days jours, ou qu'elle n'est datée qu'au mois ou à
+    l'année (impossible de la situer). Une sortie récente reste une nouveauté même au premier
+    passage.
+    """
+    if not baseline:
+        return False
+    if precision != "day":
+        return True
+    return date.fromisoformat(value) < seen_day - timedelta(days=max_age_days)
 
 
 def sort_date(value: str, precision: Precision, first_seen: date, backfill: bool) -> date:

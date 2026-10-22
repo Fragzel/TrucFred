@@ -46,11 +46,13 @@ def one_artist(fake_spotify):
     return fake_spotify
 
 
-def test_premier_run_tout_en_historique(tmp_path, one_artist) -> None:
+def test_premier_run_catalogue_en_historique_sauf_sorties_recentes(tmp_path, one_artist) -> None:
     outcome = run(tmp_path)
     releases = by_title(tmp_path)
     assert set(releases) == {"Lumières froides", "Échos"}
-    assert all(release["backfill"] for release in releases.values())
+    assert releases["Échos"]["backfill"] is True  # 26 jours : catalogue
+    assert releases["Lumières froides"]["backfill"] is False  # 6 jours : badge « Nouveau »
+    assert [item.title for item in outcome.reports[0].new_releases] == ["Lumières froides"]
     assert outcome.state_written
     assert (tmp_path / "data" / "state.json").exists()
     assert (tmp_path / "data" / "releases.json").read_text(encoding="utf-8") == (
@@ -104,14 +106,23 @@ def test_nouvelle_sortie_detectee_le_lendemain(tmp_path, one_artist) -> None:
     assert published(tmp_path)["releases"][0]["title"] == "Nouveau jour"
 
 
-def test_artiste_suivi_apres_coup_en_historique(tmp_path, one_artist) -> None:
+def test_artiste_suivi_apres_coup_catalogue_en_historique(tmp_path, one_artist) -> None:
     run(tmp_path)
     one_artist.follow(("A2", "Amel Rami"))
+    amel = (("A2", "Amel Rami"),)
     one_artist.publish(
-        "A2", "single", album("t1", "Tout doux", "2026-10-21", artists=(("A2", "Amel Rami"),))
+        "A2",
+        "single",
+        album("t1", "Tout doux", "2026-10-21", artists=amel),
+        album("t0", "Vieux tube", "2026-09-01", artists=amel),
+        album("y0", "Archives", "2026", precision="year", artists=amel),
     )
     run(tmp_path, now=NOW + DAY)
-    assert by_title(tmp_path)["Tout doux"]["backfill"] is True
+    releases = by_title(tmp_path)
+    assert releases["Tout doux"]["backfill"] is False  # sortie récente : nouveauté
+    assert releases["Vieux tube"]["backfill"] is True
+    # Datée à l'année et trouvée au premier passage : rangée au 1er janvier, donc hors fenêtre.
+    assert "Archives" not in releases
 
 
 def test_artiste_plus_suivi_retire_de_la_page(tmp_path, one_artist) -> None:

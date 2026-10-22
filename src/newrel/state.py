@@ -61,8 +61,21 @@ def context_for(
     )
 
 
-def apply_result(state: State, result: SourceResult, *, now: datetime, cutoff: date) -> ApplyStats:
-    """Intègre le résultat d'une source. Ce qui n'a pas été revérifié est conservé tel quel."""
+def apply_result(
+    state: State,
+    result: SourceResult,
+    *,
+    now: datetime,
+    cutoff: date,
+    today: date | None = None,
+    max_age_days: int = 14,
+) -> ApplyStats:
+    """Intègre le résultat d'une source. Ce qui n'a pas été revérifié est conservé tel quel.
+
+    backfill marque un lien trouvé au premier passage sur son artiste ; releases.py décide
+    ensuite s'il est du catalogue ou une nouveauté récente (dates.historical).
+    """
+    today = today or now.date()
     stats = ApplyStats()
     prefix = f"{result.platform}:"
     source = state.sources.setdefault(result.platform, SourceState())
@@ -102,7 +115,7 @@ def apply_result(state: State, result: SourceResult, *, now: datetime, cutoff: d
                     item=item, first_seen=now, last_seen=now, backfill=backfill, via=[artist_key]
                 )
                 stats.new_links += 1
-                if not backfill:
+                if not dates.historical(item.date, item.precision, today, backfill, max_age_days):
                     stats.new_releases.append(item)
             else:
                 link.item, link.last_seen = item, now

@@ -44,7 +44,9 @@ def build(
     releases: list[Release] = []
     aliases: dict[str, str] = {}
     for keys in dedup.cluster(shown, canonical):
-        release = _release([(key, shown[key]) for key in keys], tz, canonical)
+        release = _release(
+            [(key, shown[key]) for key in keys], tz, canonical, config.new_max_age_days
+        )
         if release.sort_date < cutoff:
             continue
         releases.append(release)
@@ -98,7 +100,7 @@ def _summary(source: SourceState, state: State) -> SourceSummary:
 
 
 def _release(
-    links: list[tuple[str, LinkState]], tz: ZoneInfo, canonical: dict[str, str]
+    links: list[tuple[str, LinkState]], tz: ZoneInfo, canonical: dict[str, str], max_age_days: int
 ) -> Release:
     # La sortie garde l'identifiant de son premier lien détecté, et sa « nouveauté ».
     first_key, first = min(links, key=lambda pair: (pair[1].first_seen, dedup.release_id(pair[0])))
@@ -145,6 +147,10 @@ def _release(
             ),
         )
     with_cover = next((link.item for link in ranked if link.item.cover), None)
+    seen_day = first.first_seen.astimezone(tz).date()
+    historical = dates.historical(
+        dated.date, dated.precision, seen_day, first.backfill, max_age_days
+    )
     return Release(
         id=dedup.release_id(first_key),
         title=primary.title,
@@ -154,11 +160,9 @@ def _release(
         artists=list(artists.values()),
         date=dated.date,
         precision=dated.precision,
-        sort_date=dates.sort_date(
-            dated.date, dated.precision, first.first_seen.astimezone(tz).date(), first.backfill
-        ),
+        sort_date=dates.sort_date(dated.date, dated.precision, seen_day, historical),
         first_seen=first.first_seen,
-        backfill=first.backfill,
+        backfill=historical,
         tracks=primary.tracks,
         cover=Cover(url=with_cover.cover, platform=with_cover.platform)
         if with_cover and with_cover.cover

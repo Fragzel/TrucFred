@@ -88,10 +88,11 @@ def run(
                     "warning", f"{label} non configuré (secrets absents : {', '.join(missing)})"
                 )
         if configured and previous is None:
-            # Sans état, tout part en catalogue (backfill) : aucune fausse nouveauté.
+            # Sans état, le catalogue part en historique (backfill) : aucune fausse nouveauté.
             verdict.add(
                 "warning",
-                "aucun état précédent : démarrage à zéro, sorties actuelles en historique",
+                "aucun état précédent : démarrage à zéro, sorties de plus de"
+                f" {config.new_max_age_days} jours en historique",
             )
         for name, spec in configured.items():
             context = context_for(
@@ -106,7 +107,14 @@ def run(
                     status="error",
                     message=f"erreur inattendue ({type(exc).__name__})",
                 )
-            stats = apply_result(state, result, now=now, cutoff=cutoff)
+            stats = apply_result(
+                state,
+                result,
+                now=now,
+                cutoff=cutoff,
+                today=now.astimezone(ZoneInfo(config.timezone)).date(),
+                max_age_days=config.new_max_age_days,
+            )
             warnings += result.warnings
             reports.append(
                 SourceReport(

@@ -97,6 +97,14 @@ def test_dates_partielles(value: str, precision: str, expected) -> None:
     assert dates.normalize(value, precision) == expected
 
 
+def test_historique_au_premier_passage() -> None:
+    seen = date(2026, 10, 22)
+    assert dates.historical("2026-10-01", "day", seen, True, 14) is True
+    assert dates.historical("2026-10-08", "day", seen, True, 14) is False  # 14 jours pile
+    assert dates.historical("2026-10", "month", seen, True, 14) is True
+    assert dates.historical("2026-01-01", "day", seen, False, 14) is False  # pas un 1er passage
+
+
 def test_date_de_tri() -> None:
     seen = date(2026, 10, 23)
     assert dates.sort_date("2026-10-17", "day", seen, False) == date(2026, 10, 17)

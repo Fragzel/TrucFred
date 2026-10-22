@@ -35,7 +35,7 @@ l'étape 2 du [plan](docs/PLAN.md).
 
 | Commande | Effet |
 |---|---|
-| `uv run newrel fetch spotify` | Interroge Spotify à blanc et liste les sorties trouvées, sans rien écrire |
+| `uv run newrel fetch spotify` | Interroge Spotify à blanc et liste les sorties trouvées, sans rien écrire. Limité à 10 appels catalogue (`--budget N` pour changer), pris sur le quota quotidien du workflow |
 | `uv run newrel run` | Run complet en local : état dans `data/`, site dans `_site/` |
 | `uv run newrel serve` | Sert le site sur <http://127.0.0.1:8000>, avec les données de `data/` ou, à défaut, `site/sample.json` |
 | `uv run newrel auth spotify` | Ré-autorise Spotify (voir le runbook) |
@@ -57,6 +57,26 @@ git fetch origin data
 git worktree add data origin/data
 ```
 
+## Quota Spotify
+
+En Development Mode, le catalogue Spotify accepte environ **100 appels par 24 h**. Ce chiffre a
+été mesuré le 22/10/2026 (Spotify ne le documente pas), et il est partagé par toutes les apps de
+ton compte développeur ainsi que par `newrel fetch` en local.
+
+- **Budget** : chaque run dépense au plus 90 appels (`daily_catalog_calls` dans `config.toml`),
+  ce qui laisse 10 appels pour tes essais en local.
+- **Coût par artiste** :
+  - 1 appel suffit pour relire le total de ses albums et singles ;
+  - s'il augmente, 2 appels de plus lisent le détail ;
+  - un artiste est de toute façon relu en détail au moins une fois par mois.
+- **Ordre de passage** : d'abord les artistes jamais vérifiés, puis les plus en retard sur leur
+  rythme, environ tous les 2 jours pour un artiste actif (une sortie dans l'année) et tous les
+  7 jours pour un artiste en sommeil.
+- **Montée en charge** : les premiers jours, les artistes jamais vérifiés coûtent 2 appels
+  chacun. La page indique combien restent à vérifier.
+- **Si le quota est épuisé** : l'heure de reprise, donnée par `Retry-After`, est mémorisée.
+  Aucun appel catalogue n'est fait avant cette heure, mais les abonnements continuent d'être lus.
+
 ## Runbook
 
 | Situation | Quoi faire |
@@ -65,6 +85,7 @@ git worktree add data origin/data
 | Avertissement « nouveau refresh token qui n'a pas pu être enregistré » | Spotify fait tourner le refresh token. Crée un PAT *fine-grained* limité à ce dépôt, avec la permission *Secrets : read and write*, et enregistre-le dans le secret `NEWREL_SECRETS_PAT` : le workflow mettra alors le token à jour à chaque run. |
 | Run rouge « abonnements reçus contre N au run précédent » | Si la baisse est voulue (gros ménage dans tes abonnements) : `gh workflow run update.yml -f accept_drop=true`. |
 | Bannière « Données vieilles de … » sur la page | Le cron ne tourne plus : un dépôt public sans activité pendant 60 jours voit ses runs planifiés désactivés. Relance-le avec `gh workflow enable update.yml`. |
+| Avertissement « quota épuisé jusqu'au … » | Le quota a été dépassé, par exemple après trop d'appels `fetch` en local. Rien à faire : la collecte reprend toute seule à l'heure indiquée. |
 | Spotify « en panne » une seule journée | Rien à faire : la page garde les données du dernier run réussi, et le run ne passe au rouge qu'au deuxième échec d'affilée. |
 | Modifier uniquement la page | Pousse les changements de `site/` : le site est reconstruit sans appeler les API. Pour le reconstruire à la main : `gh workflow run update.yml -f offline=true`. |
 | Repartir de zéro | `git push origin --delete data`, puis relance le workflow. |

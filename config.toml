@@ -18,3 +18,10 @@ max_pages = 5
 requests_per_second = 2.0
 time_budget_minutes = 15
 max_retry_after_seconds = 120
+# Quota Development Mode mesuré le 22/10/2026 : ~100 appels catalogue par 24 h, partagés par toutes
+# les apps du compte développeur (et par « newrel fetch » en local). On en garde 10 de marge.
+daily_catalog_calls = 90
+active_within_days = 365    # artiste « actif » : une sortie dans l'année
+active_interval_days = 2    # vérifié environ tous les 2 jours…
+dormant_interval_days = 7   # … contre tous les 7 jours pour un artiste en sommeil
+full_check_days = 30        # relecture complète au moins une fois par mois, même sans changement

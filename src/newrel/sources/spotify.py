@@ -2,6 +2,10 @@
 
 Si le refresh token expire (6 mois), seuls les nouveaux abonnements cessent d'être vus : les
 sorties des artistes déjà connus continuent d'arriver via le token d'application.
+
+Le catalogue est limité à environ 100 appels par 24 h en Development Mode. Chaque run dépense
+donc un budget fixe, en commençant par les artistes les plus en retard, et ne relit en détail
+un artiste que si son nombre total de sorties a augmenté (un seul appel sinon).
 """
 
 from __future__ import annotations
@@ -10,13 +14,14 @@ import base64
 import itertools
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from newrel import dates, github
 from newrel.http import AuthExpired, HttpClient, HttpError, RateLimited, ensure_ok, json_body, mask
 from newrel.models import FollowedArtist, ItemArtist, SourceItem
-from newrel.sources.base import SourceContext, SourceResult, followings_guard
+from newrel.sources.base import ArtistCheck, SourceContext, SourceResult, followings_guard
 
 PLATFORM = "spotify"
 REQUIRED_ENV = ("SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET", "SPOTIFY_REFRESH_TOKEN")
@@ -33,6 +38,7 @@ class SpotifyApi:
         mask(credentials)
         self._basic = f"Basic {credentials}"
         self._app_token: str | None = None
+        self.catalog_calls = 0
 
     def _token(self, form: dict[str, str]) -> dict[str, Any]:
         response = self.http.request(
@@ -87,14 +93,19 @@ class SpotifyApi:
                 return list(artists.values())
             params = {**params, "after": after}
 
-    def artist_albums(self, artist_id: str, group: str, market: str, offset: int) -> dict[str, Any]:
+    def artist_albums(
+        self, artist_id: str, groups: str, market: str, offset: int, limit: int = PAGE_LIMIT
+    ) -> dict[str, Any]:
+        """Un appel catalogue, décompté du quota quotidien."""
         path = f"/artists/{artist_id}/albums"
-        params = {"include_groups": group, "market": market, "limit": PAGE_LIMIT, "offset": offset}
+        params = {"include_groups": groups, "market": market, "limit": limit, "offset": offset}
+        self.catalog_calls += 1
         try:
             return self.get(path, self.app_token(), params)
         except HttpError as exc:
             if exc.status_code != 401:
                 raise
+            self.catalog_calls += 1
             return self.get(path, self.app_token(renew=True), params)  # token d'application expiré
 
 
@@ -211,38 +222,131 @@ def _catalog(
     clock: Callable[[], float],
 ) -> None:
     settings = ctx.config.spotify
+    if ctx.quota_reset_at and ctx.now < ctx.quota_reset_at:
+        result.quota_reset_at, result.pending = ctx.quota_reset_at, len(artists)
+        stamp = _local(ctx.quota_reset_at, ctx)
+        result.degrade("partial", f"quota épuisé jusqu'au {stamp} : aucun artiste vérifié")
+        return
     try:
         api.app_token()
     except HttpError as exc:
         result.degrade("error", f"jeton d'application indisponible ({exc})")
         return
-    never = datetime.min.replace(tzinfo=UTC)
-    queue = sorted(
-        artists, key=lambda artist: (ctx.last_checked.get(artist.key, never), artist.key)
-    )
+    queue = sorted(artists, key=lambda artist: _priority(artist, ctx))
     deadline = clock() + settings.time_budget_minutes * 60
     for index, artist in enumerate(queue):
-        postponed = f"{len(queue) - index} artiste(s) reporté(s) au prochain run"
+        postponed = len(queue) - index
         if clock() > deadline:
-            result.degrade("partial", f"budget de temps épuisé : {postponed}")
+            result.pending = postponed
+            result.degrade("partial", f"budget de temps épuisé : {postponed} artiste(s) reportés")
             return
-        baseline = artist.key not in ctx.baselined_artists
+        remaining = settings.daily_catalog_calls - api.catalog_calls
         try:
-            items = [
-                item
-                for group in settings.groups
-                for item in _fetch_group(api, ctx, result, artist, group, baseline)
-            ]
+            check = _check_artist(api, ctx, result, artist, remaining)
         except RateLimited as exc:
-            result.degrade("partial", f"{exc} : {postponed}")
+            result.pending = postponed
+            message = f"{exc} : {postponed} artiste(s) reporté(s)"
+            if exc.quota and exc.retry_after is not None:
+                result.quota_reset_at = ctx.now + timedelta(seconds=exc.retry_after)
+                message += f", reprise après le {_local(result.quota_reset_at, ctx)}"
+            result.degrade("partial", message)
             return
         except HttpError as exc:
             if exc.status_code == 404:  # artiste supprimé du catalogue
-                result.checked[artist.key] = []
+                result.checked[artist.key] = ArtistCheck()
             else:
                 result.degrade("partial", f"{artist.name} non vérifié ({exc})")
             continue
-        result.checked[artist.key] = items
+        if check is None:  # budget du jour atteint : c'est le fonctionnement normal
+            result.pending = postponed
+            return
+        result.checked[artist.key] = check
+
+
+def _local(moment: datetime, ctx: SourceContext) -> str:
+    return moment.astimezone(ZoneInfo(ctx.config.timezone)).strftime("%d/%m à %H:%M")
+
+
+def _interval_days(artist_key: str, ctx: SourceContext) -> float:
+    """Rythme de vérification : un artiste sans sortie depuis un an passe moins souvent."""
+    settings = ctx.config.spotify
+    latest = ctx.artists[artist_key].latest_release
+    if latest is not None and (ctx.now.date() - latest).days > settings.active_within_days:
+        return settings.dormant_interval_days
+    return settings.active_interval_days
+
+
+def _priority(artist: FollowedArtist, ctx: SourceContext) -> tuple[int, float, str]:
+    """Jamais vérifiés d'abord, puis les plus en retard sur leur rythme."""
+    state = ctx.artists.get(artist.key)
+    if state is None:
+        return (0, 0.0, artist.key)
+    elapsed = (ctx.now - state.last_checked_at).total_seconds() / 86_400
+    return (1, -elapsed / _interval_days(artist.key, ctx), artist.key)
+
+
+def _latest(*candidates: date | None) -> date | None:
+    return max((day for day in candidates if day is not None), default=None)
+
+
+def _check_artist(
+    api: SpotifyApi,
+    ctx: SourceContext,
+    result: SourceResult,
+    artist: FollowedArtist,
+    remaining: int,
+) -> ArtistCheck | None:
+    """Vérifie un artiste ; None si le budget d'appels restant ne suffit pas."""
+    settings = ctx.config.spotify
+    state = ctx.artists.get(artist.key)
+    detailed_cost = len(settings.groups)
+    if (
+        state is None
+        or state.catalog_total is None
+        or state.last_full_at is None
+        or ctx.now - state.last_full_at >= timedelta(days=settings.full_check_days)
+    ):
+        if remaining < detailed_cost:
+            return None
+        return _full_check(api, ctx, result, artist)
+    if remaining < 1 + detailed_cost:
+        return None
+    total, latest = _catalog_total(api, ctx, artist)
+    if total <= state.catalog_total:  # rien d'ajouté : un seul appel dépensé
+        latest_release = _latest(state.latest_release, latest)
+        return ArtistCheck(catalog_total=total, latest_release=latest_release, full=False)
+    return _full_check(api, ctx, result, artist)
+
+
+def _full_check(
+    api: SpotifyApi, ctx: SourceContext, result: SourceResult, artist: FollowedArtist
+) -> ArtistCheck:
+    baseline = artist.key not in ctx.artists
+    items: list[SourceItem] = []
+    total = 0
+    for group in ctx.config.spotify.groups:
+        found, group_total = _fetch_group(api, ctx, result, artist, group, baseline)
+        items += found
+        total += group_total
+    previous = ctx.artists.get(artist.key)
+    latest = _latest(
+        previous.latest_release if previous else None,
+        *(dates.bounds(item.date, item.precision)[0] for item in items),
+    )
+    return ArtistCheck(items=items, catalog_total=total, latest_release=latest, full=True)
+
+
+def _catalog_total(
+    api: SpotifyApi, ctx: SourceContext, artist: FollowedArtist
+) -> tuple[int, date | None]:
+    """Nombre total d'albums et de singles, en un seul appel (limit=1)."""
+    settings = ctx.config.spotify
+    artist_id = artist.key.rsplit(":", 1)[1]
+    page = api.artist_albums(artist_id, ",".join(settings.groups), settings.market, 0, limit=1)
+    albums = [album for album in page.get("items") or [] if album and album.get("id")]
+    first = next((item for item in map(album_to_item, albums) if item), None)
+    latest = dates.bounds(first.date, first.precision)[0] if first else None
+    return int(page.get("total") or 0), latest
 
 
 def _fetch_group(
@@ -252,17 +356,21 @@ def _fetch_group(
     artist: FollowedArtist,
     group: str,
     baseline: bool,
-) -> list[SourceItem]:
-    """Sorties d'un groupe (album ou single) ; page suivante seulement s'il peut y avoir du neuf.
+) -> tuple[list[SourceItem], int]:
+    """Sorties d'un groupe (album ou single) et total du groupe.
 
-    Premier passage sur un artiste (baseline) : une seule page, c'est du catalogue.
+    Page suivante seulement s'il peut y avoir du neuf. Premier passage sur un artiste
+    (baseline) : une seule page, c'est du catalogue.
     """
     settings = ctx.config.spotify
     artist_id = artist.key.rsplit(":", 1)[1]
     items: list[SourceItem] = []
+    total: int | None = None
     offset, warned = 0, False
     for page_number in range(1, settings.max_pages + 1):
         page = api.artist_albums(artist_id, group, settings.market, offset)
+        if total is None:
+            total = int(page.get("total") or 0)
         albums = [album for album in page.get("items") or [] if album and album.get("id")]
         found = [item for item in map(album_to_item, albums) if item]
         items += found
@@ -283,4 +391,4 @@ def _fetch_group(
         all_new = all(item.key not in ctx.known_links for item in found)
         if not (all_new and oldest_end >= ctx.cutoff):
             break
-    return items
+    return items, total or 0

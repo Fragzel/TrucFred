@@ -63,6 +63,8 @@ class SourceState(Model):
     consecutive_failures: int = 0
     followings: list[FollowedArtist] = Field(default_factory=list)
     followings_at: datetime | None = None
+    quota_reset_at: datetime | None = None
+    """Quota épuisé : aucun appel catalogue avant cette date (indiquée par Retry-After)."""
 
 
 class ArtistState(Model):
@@ -70,6 +72,11 @@ class ArtistState(Model):
     baseline_at: datetime
     """Première vérification : tout ce qui est trouvé ce jour-là est du catalogue (backfill)."""
     last_checked_at: datetime
+    catalog_total: int | None = None
+    """Nombre d'albums et de singles au dernier passage : s'il ne bouge pas, rien de neuf."""
+    latest_release: date | None = None
+    last_full_at: datetime | None = None
+    """Dernière lecture détaillée (et pas seulement du total)."""
 
 
 class LinkState(Model):
@@ -134,6 +141,8 @@ class SourceSummary(Model):
     message: str | None = None
     last_success_at: datetime | None = None
     followed: int = 0
+    unchecked: int = 0
+    """Artistes suivis jamais vérifiés (montée en charge, quota oblige)."""
 
 
 class Rules(Model):

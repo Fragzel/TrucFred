@@ -6,6 +6,7 @@ import argparse
 import logging
 import os
 import sys
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -54,6 +55,12 @@ def _parser() -> argparse.ArgumentParser:
     fetch = commands.add_parser("fetch", help="interroge une source à blanc, sans rien écrire")
     fetch.add_argument("source", choices=sorted(SOURCES))
     _common(fetch)
+    fetch.add_argument(
+        "--budget",
+        type=int,
+        default=10,
+        help="appels catalogue autorisés (pris sur le quota quotidien partagé avec le workflow)",
+    )
 
     auth = commands.add_parser(
         "auth", help="autorisation OAuth locale (Spotify : tous les ~6 mois)"
@@ -90,16 +97,20 @@ def _github_file(variable: str, text: str) -> None:
 
 
 def _summary(outcome: pipeline.RunOutcome) -> str:
-    lines = ["## Collecte", "", "| Source | Statut | Appels | Artistes vérifiés | Nouveautés |"]
-    lines.append("|---|---|---|---|---|")
+    lines = [
+        "## Collecte",
+        "",
+        "| Source | Statut | Appels | Artistes vérifiés | En attente | Nouveautés |",
+        "|---|---|---|---|---|---|",
+    ]
     for report in outcome.reports:
         label = LABELS.get(report.platform, report.platform)
         lines.append(
             f"| {label} | {report.status} | {report.calls} | {report.checked}"
-            f" | {len(report.new_releases)} |"
+            f" | {report.pending} | {len(report.new_releases)} |"
         )
     if not outcome.reports:
-        lines.append("| — | aucune collecte | | | |")
+        lines.append("| — | aucune collecte | | | | |")
     lines += ["", f"{len(outcome.releases.releases)} sorties publiées sur la page.", ""]
     for level, message in outcome.verdict.messages:
         lines.append(f"- {'🔴' if level == 'error' else '🟡'} {message}")
@@ -125,8 +136,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
     for report in outcome.reports:
         label = LABELS.get(report.platform, report.platform)
         print(
-            f"{label} : {report.status}, {report.calls} appels, {report.checked} artistes vérifiés,"
-            f" {report.new_links} liens ajoutés dont {len(report.new_releases)} nouveautés"
+            f"{label} : {report.status}, {report.calls} appels, {report.checked} artistes vérifiés"
+            f" ({report.pending} en attente), {report.new_links} liens ajoutés"
+            f" dont {len(report.new_releases)} nouveautés"
         )
     print(f"{len(outcome.releases.releases)} sorties publiées, verdict : {outcome.verdict.level}")
     for level, message in outcome.verdict.messages:
@@ -141,6 +153,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 def _cmd_fetch(args: argparse.Namespace) -> int:
     config = load_config(args.config)
+    config = replace(config, spotify=replace(config.spotify, daily_catalog_calls=args.budget))
+    print(f"Budget : {args.budget} appels catalogue, pris sur le quota quotidien du workflow.")
     spec = SOURCES[args.source]
     missing = [var for var in spec.required_env if not os.environ.get(var)]
     if missing:
@@ -157,14 +171,14 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
     result = spec.collect(context)
     print(f"Statut : {result.status}{f' ({result.message})' if result.message else ''}")
     followed = len(result.followings) if result.followings is not None else "inchangés"
-    checked = len(result.checked)
+    checked = f"{len(result.checked)} (+{result.pending} en attente)"
     print(f"Abonnements : {followed} · artistes vérifiés : {checked} · appels : {result.calls}")
     for warning in result.warnings:
         print(f"[avertissement] {warning}")
     items = {
         item.key: item
-        for items in result.checked.values()
-        for item in items
+        for check in result.checked.values()
+        for item in check.items
         if dates.bounds(item.date, item.precision)[1] >= cutoff
     }
     print(f"\n{len(items)} sorties dans la fenêtre de {config.window_days} jours :")

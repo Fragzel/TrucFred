@@ -1,15 +1,42 @@
 from dataclasses import replace
 from datetime import date, timedelta
 
-from newrel.models import FollowedArtist
+from newrel.models import ArtistState, FollowedArtist
 from newrel.sources import spotify
 from newrel.sources.spotify import album_to_item
 from tests.helpers import CONFIG, NOW, collect_quickly, make_context, quick_http
 from tests.spotify_fake import album
 
+DAY = timedelta(days=1)
+
 
 def followed(*ids: str) -> tuple[FollowedArtist, ...]:
     return tuple(FollowedArtist(key=f"spotify:artist:{i}", name=f"Artiste {i}") for i in ids)
+
+
+def known(
+    *ids: str,
+    total: int | None = None,
+    latest: date | None = None,
+    checked_ago: timedelta = DAY,
+    full_ago: timedelta = DAY,
+) -> dict[str, ArtistState]:
+    """Artistes déjà vérifiés ; sans total connu, le prochain passage est détaillé."""
+    return {
+        f"spotify:artist:{i}": ArtistState(
+            name=f"Artiste {i}",
+            baseline_at=NOW - 30 * DAY,
+            last_checked_at=NOW - checked_ago,
+            catalog_total=total,
+            latest_release=latest,
+            last_full_at=NOW - full_ago,
+        )
+        for i in ids
+    }
+
+
+def with_budget(calls: int):
+    return replace(CONFIG, spotify=replace(CONFIG.spotify, daily_catalog_calls=calls))
 
 
 def singles(prefix: str, *days: str, artist: str = "A1") -> list[dict]:
@@ -75,7 +102,7 @@ def test_refresh_token_expire_fige_les_abonnements(fake_spotify) -> None:
     assert result.status == "auth_expired"
     assert "uv run newrel auth spotify" in result.message
     assert result.followings is None
-    assert [item.key for item in result.checked["spotify:artist:A1"]] == ["spotify:album:s0"]
+    assert [item.key for item in result.checked["spotify:artist:A1"].items] == ["spotify:album:s0"]
 
 
 def test_chute_brutale_des_abonnements_ignoree(fake_spotify) -> None:
@@ -111,7 +138,10 @@ def test_premier_passage_une_page_par_groupe(fake_spotify) -> None:
         fake_spotify.publish(artist, "album", long)
     result = collect_quickly(make_context())
     assert fake_spotify.albums_route.call_count == 6  # 3 artistes × 2 groupes, une page chacun
-    assert all(len(items) == 11 for items in result.checked.values())
+    checks = list(result.checked.values())
+    assert all(len(check.items) == 11 for check in checks)
+    assert all((check.catalog_total, check.full) == (16, True) for check in checks)
+    assert checks[0].latest_release == date(2026, 10, 20)
 
 
 def test_artiste_connu_pagine_jusqu_a_une_sortie_deja_vue(fake_spotify) -> None:
@@ -119,21 +149,19 @@ def test_artiste_connu_pagine_jusqu_a_une_sortie_deja_vue(fake_spotify) -> None:
     fake_spotify.publish("A1", "single", *singles("s", *days_back(25)))
     context = make_context(
         previous_followings=followed("A1"),
-        baselined_artists=frozenset({"spotify:artist:A1"}),
+        artists=known("A1"),
         known_links=frozenset({"spotify:album:s12"}),
     )
     result = collect_quickly(context)
     assert group_calls(fake_spotify, "single") == 2  # la page 2 contient s12 : pas de page 3
-    assert len(result.checked["spotify:artist:A1"]) == 20
+    assert len(result.checked["spotify:artist:A1"].items) == 20
 
 
 def test_sorties_trop_anciennes_arretent_la_pagination(fake_spotify) -> None:
     days = ["2026-10-20"] * 9 + ["2026-06-01"] * 6  # la 10e sortie est hors fenêtre
     fake_spotify.follow(("A1", "Un"))
     fake_spotify.publish("A1", "single", *singles("s", *days))
-    context = make_context(
-        previous_followings=followed("A1"), baselined_artists=frozenset({"spotify:artist:A1"})
-    )
+    context = make_context(previous_followings=followed("A1"), artists=known("A1"))
     collect_quickly(context)
     assert group_calls(fake_spotify, "single") == 1
 
@@ -144,11 +172,11 @@ def test_ordre_inattendu_prolonge_la_pagination(fake_spotify) -> None:
     fake_spotify.publish("A1", "single", *singles("s", *days))
     context = make_context(
         previous_followings=followed("A1"),
-        baselined_artists=frozenset({"spotify:artist:A1"}),
+        artists=known("A1"),
         known_links=frozenset({"spotify:album:s0"}),
     )
     result = collect_quickly(context)
-    assert len(result.checked["spotify:artist:A1"]) == 13
+    assert len(result.checked["spotify:artist:A1"].items) == 13
     assert any("ordre inattendu" in warning for warning in result.warnings)
 
 
@@ -169,25 +197,84 @@ def test_artiste_en_erreur_n_empeche_pas_les_autres(fake_spotify) -> None:
     assert sorted(result.checked) == ["spotify:artist:A1", "spotify:artist:A3"]
 
 
-def test_artistes_les_moins_recemment_verifies_d_abord(fake_spotify) -> None:
+def test_artistes_jamais_verifies_d_abord(fake_spotify) -> None:
     fake_spotify.follow(("A1", "Un"), ("A2", "Deux"))
     fake_spotify.rate_limited_artists = {"A1"}
-    result = collect_quickly(make_context(last_checked={"spotify:artist:A1": NOW}))
+    result = collect_quickly(make_context(artists=known("A1", checked_ago=timedelta(0))))
     assert list(result.checked) == ["spotify:artist:A2"]  # A2 jamais vérifié : il passe avant
 
 
-def test_budget_d_appels_d_un_run_normal(fake_spotify) -> None:
+def test_artiste_actif_passe_avant_artiste_en_sommeil(fake_spotify) -> None:
+    fake_spotify.follow(("A1", "En sommeil"), ("A2", "Actif"))
+    artists = known("A1", total=0, latest=date(2024, 5, 1), checked_ago=3 * DAY) | known(
+        "A2", total=0, latest=date(2026, 9, 1), checked_ago=1.5 * DAY
+    )
+    # 3 jours sur un rythme de 7 jours (0,43) contre 1,5 jour sur un rythme de 2 jours (0,75).
+    result = collect_quickly(make_context(config=with_budget(3), artists=artists))
+    assert list(result.checked) == ["spotify:artist:A2"]
+
+
+def test_total_inchange_un_seul_appel_par_artiste(fake_spotify) -> None:
     artists = [f"A{n}" for n in range(20)]
     fake_spotify.follow(*[(artist, f"Artiste {artist}") for artist in artists])
     for artist in artists:
         fake_spotify.publish(artist, "single", *singles(f"{artist}s", "2026-10-10", artist=artist))
-    context = make_context(
-        previous_followings=followed(*artists),
-        baselined_artists=frozenset(f"spotify:artist:{artist}" for artist in artists),
-        known_links=frozenset(f"spotify:album:{artist}s0" for artist in artists),
-    )
+    context = make_context(previous_followings=followed(*artists), artists=known(*artists, total=1))
     result = collect_quickly(context)
-    assert result.calls <= 2 * len(artists) + 10
+    assert fake_spotify.catalog_calls == 20
+    assert all(
+        (c.items, c.catalog_total, c.full) == ([], 1, False) for c in result.checked.values()
+    )
+    assert result.checked["spotify:artist:A0"].latest_release == date(2026, 10, 10)
+
+
+def test_total_en_hausse_declenche_la_lecture_detaillee(fake_spotify) -> None:
+    fake_spotify.follow(("A1", "Un"))
+    fake_spotify.publish("A1", "single", *singles("s", "2026-10-21", "2026-10-10"))
+    context = make_context(
+        previous_followings=followed("A1"),
+        artists=known("A1", total=1),
+        known_links=frozenset({"spotify:album:s1"}),
+    )
+    check = collect_quickly(context).checked["spotify:artist:A1"]
+    assert fake_spotify.catalog_calls == 3  # total, puis singles et albums
+    assert (check.catalog_total, check.full) == (2, True)
+    assert "spotify:album:s0" in [item.key for item in check.items]
+
+
+def test_relecture_complete_au_moins_une_fois_par_mois(fake_spotify) -> None:
+    fake_spotify.follow(("A1", "Un"))
+    fake_spotify.publish("A1", "single", *singles("s", "2026-10-10"))
+    artists = known("A1", total=1, full_ago=31 * DAY)
+    check = collect_quickly(make_context(artists=artists)).checked["spotify:artist:A1"]
+    assert (fake_spotify.catalog_calls, check.full) == (2, True)
+
+
+def test_budget_quotidien_garde_la_suite_pour_le_prochain_run(fake_spotify) -> None:
+    fake_spotify.follow(*[(f"A{n}", f"Artiste {n}") for n in range(10)])
+    result = collect_quickly(make_context(config=with_budget(5)))
+    assert result.status == "ok"  # budget atteint : fonctionnement normal, pas une alerte
+    assert (len(result.checked), result.pending, fake_spotify.catalog_calls) == (2, 8, 4)
+
+
+def test_quota_epuise_memorise_l_heure_de_reprise(fake_spotify) -> None:
+    fake_spotify.follow(("A1", "Un"), ("A2", "Deux"), ("A3", "Trois"))
+    fake_spotify.quota = 3
+    result = collect_quickly(make_context())
+    assert result.status == "partial"
+    assert list(result.checked) == ["spotify:artist:A1"]
+    assert result.pending == 2
+    assert result.quota_reset_at == NOW + timedelta(seconds=86111)
+    assert "reprise après le 23/10 à 06:12" in result.message
+
+
+def test_quota_en_cours_aucun_appel_catalogue(fake_spotify) -> None:
+    fake_spotify.follow(("A1", "Un"))
+    reset = NOW + timedelta(hours=1)
+    result = collect_quickly(make_context(quota_reset_at=reset))
+    assert fake_spotify.catalog_calls == 0
+    assert (result.status, result.pending, result.quota_reset_at) == ("partial", 1, reset)
+    assert result.followings is not None  # les abonnements, eux, sont lus
 
 
 def test_budget_de_temps_reporte_les_artistes_restants(fake_spotify) -> None:

@@ -54,6 +54,7 @@ def build(state: State, config: Config, *, generated_at: datetime, now: datetime
                 message=source.message,
                 last_success_at=source.last_success_at,
                 followed=len(source.followings),
+                unchecked=sum(artist.key not in state.artists for artist in source.followings),
             )
             for name, source in sorted(state.sources.items())
         },

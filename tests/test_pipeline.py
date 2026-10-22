@@ -62,7 +62,23 @@ def test_premier_run_tout_en_historique(tmp_path, one_artist) -> None:
         "message": None,
         "last_success_at": "2026-10-22T04:17:00Z",
         "followed": 1,
+        "unchecked": 0,
     }
+
+
+def test_quota_epuise_memorise_d_un_run_a_l_autre(tmp_path, one_artist) -> None:
+    one_artist.follow(("A2", "Amel Rami"))
+    one_artist.quota = 1  # le 2e appel catalogue du run est refusé
+    run(tmp_path)
+    assert published(tmp_path)["sources"]["spotify"]["unchecked"] == 2
+    calls = one_artist.catalog_calls
+    run(tmp_path, now=NOW + timedelta(hours=1))  # blocage en cours : aucun appel catalogue
+    assert one_artist.catalog_calls == calls
+    assert "quota épuisé jusqu'au 23/10" in published(tmp_path)["sources"]["spotify"]["message"]
+    one_artist.quota = None
+    run(tmp_path, now=NOW + DAY)  # Retry-After écoulé : la collecte reprend
+    assert published(tmp_path)["sources"]["spotify"]["unchecked"] == 0
+    assert published(tmp_path)["sources"]["spotify"]["status"] == "ok"
 
 
 def test_nouvelle_sortie_detectee_le_lendemain(tmp_path, one_artist) -> None:

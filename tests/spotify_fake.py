@@ -66,6 +66,8 @@ class FakeSpotify:
         self.rotate = False
         self.failing_artists: set[str] = set()
         self.rate_limited_artists: set[str] = set()
+        self.quota: int | None = None  # appels catalogue acceptés avant QUOTA_EXCEEDED
+        self.catalog_calls = 0
         self.token_route = router.post(TOKEN_URL).mock(side_effect=self._token)
         self.following_route = router.get(f"{API_URL}/me/following").mock(
             side_effect=self._following
@@ -129,12 +131,20 @@ class FakeSpotify:
         params = request.url.params
         group, limit = params["include_groups"], int(params["limit"])
         offset = int(params.get("offset", "0"))
-        assert "," not in group and limit <= 10 and params["market"] == "FR"
+        groups = group.split(",")
+        # Plusieurs groupes à la fois : seulement pour lire le total (limit=1), comme newrel.
+        assert (len(groups) == 1 or limit == 1) and limit <= 10 and params["market"] == "FR"
+        self.catalog_calls += 1
+        if self.quota is not None and self.catalog_calls > self.quota:
+            body = {
+                "error": {"status": 429, "message": "Too many requests", "reason": "QUOTA_EXCEEDED"}
+            }
+            return httpx.Response(429, headers={"Retry-After": "86111"}, json=body)
         if artist_id in self.failing_artists:
             return httpx.Response(503)
         if artist_id in self.rate_limited_artists:
             return httpx.Response(429, headers={"Retry-After": "900"})
-        albums = self.albums.get((artist_id, group), [])
+        albums = [album for name in groups for album in self.albums.get((artist_id, name), [])]
         more = offset + limit < len(albums)
         page = {
             "href": str(request.url),

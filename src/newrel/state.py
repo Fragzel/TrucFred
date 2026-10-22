@@ -54,13 +54,9 @@ def context_for(
         now=now,
         cutoff=cutoff,
         known_links=frozenset(key for key in state.links if key.startswith(prefix)),
-        baselined_artists=frozenset(key for key in state.artists if key.startswith(prefix)),
-        last_checked={
-            key: artist.last_checked_at
-            for key, artist in state.artists.items()
-            if key.startswith(prefix)
-        },
+        artists={key: artist for key, artist in state.artists.items() if key.startswith(prefix)},
         previous_followings=tuple(source.followings),
+        quota_reset_at=source.quota_reset_at,
         accept_drop=accept_drop,
     )
 
@@ -78,6 +74,7 @@ def apply_result(state: State, result: SourceResult, *, now: datetime, cutoff: d
         source.consecutive_failures += 1
     if result.status == "ok" or result.checked:
         source.last_success_at = now
+    source.quota_reset_at = result.quota_reset_at
 
     if result.followings is not None:
         followed = {artist.key for artist in result.followings}
@@ -92,9 +89,9 @@ def apply_result(state: State, result: SourceResult, *, now: datetime, cutoff: d
         source.followings_at = now
 
     names = {artist.key: artist.name for artist in source.followings}
-    for artist_key, items in result.checked.items():
+    for artist_key, check in result.checked.items():
         known = state.artists.get(artist_key)
-        for item in items:
+        for item in check.items:
             if dates.bounds(item.date, item.precision)[1] < cutoff:
                 continue  # hors fenêtre : on ne le stocke pas
             link = state.links.get(item.key)
@@ -114,6 +111,9 @@ def apply_result(state: State, result: SourceResult, *, now: datetime, cutoff: d
             name=names.get(artist_key) or (known.name if known else artist_key),
             baseline_at=known.baseline_at if known else now,
             last_checked_at=now,
+            catalog_total=check.catalog_total,
+            latest_release=check.latest_release,
+            last_full_at=now if check.full else (known.last_full_at if known else None),
         )
     return stats
 

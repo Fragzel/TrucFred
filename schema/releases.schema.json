@@ -283,6 +283,11 @@
           "default": 0,
           "title": "Followed",
           "type": "integer"
+        },
+        "unchecked": {
+          "default": 0,
+          "title": "Unchecked",
+          "type": "integer"
         }
       },
       "title": "SourceSummary",

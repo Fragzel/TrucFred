@@ -23,6 +23,13 @@ class HttpError(Exception):
 class RateLimited(HttpError):
     """Le service impose une attente trop longue pour ce run, ou le quota est épuisé."""
 
+    def __init__(
+        self, message: str, *, retry_after: float | None = None, quota: bool = False
+    ) -> None:
+        super().__init__(message, 429)
+        self.retry_after = retry_after
+        self.quota = quota
+
 
 class AuthExpired(Exception):
     """Le refresh token est refusé : il faut une ré-autorisation manuelle."""
@@ -110,15 +117,20 @@ class HttpClient:
                 attempt += 1
                 continue
             if response.status_code == 429:
+                wait = _retry_after(response)
                 if _quota_exceeded(response):
                     # La fenêtre du quota n'est pas documentée : on garde l'indice du serveur.
-                    hint = response.headers.get("Retry-After")
-                    detail = f", Retry-After : {hint} s" if hint else ", sans Retry-After"
-                    raise RateLimited(f"quota épuisé (QUOTA_EXCEEDED{detail})", 429)
-                wait = _retry_after(response)
+                    hinted = "Retry-After" in response.headers
+                    detail = f", Retry-After : {wait:.0f} s" if hinted else ", sans Retry-After"
+                    raise RateLimited(
+                        f"quota épuisé (QUOTA_EXCEEDED{detail})",
+                        retry_after=wait if hinted else None,
+                        quota=True,
+                    )
                 if wait > self._max_retry_after or attempt >= self._retries:
                     raise RateLimited(
-                        f"limite de débit atteinte (attente demandée : {wait:.0f} s)", 429
+                        f"limite de débit atteinte (attente demandée : {wait:.0f} s)",
+                        retry_after=wait,
                     )
                 self._sleep(wait)
                 attempt += 1

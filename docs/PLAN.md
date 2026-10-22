@@ -155,10 +155,21 @@ Le job qui exécute les dépendances Python n'a aucun droit d'écriture sur le r
 
 Chaque source a son propre débit. Spotify est pour l'instant la seule ; à l'étape 2, les deux sources tourneront en parallèle.
 
-**Spotify** (environ 606 appels pour 300 artistes) :
+**Spotify** : un budget de 90 appels catalogue par run (révision du 22/10/2026).
+- Quota mesuré au premier run réel : `QUOTA_EXCEEDED` après 100 appels catalogue, avec `Retry-After : 86111 s`. Le Development Mode autorise donc environ **100 appels catalogue par 24 h**, partagés par toutes les apps du compte développeur.
+  - Les abonnements (`/me/following`) dépendent d'un autre paquet et restent lisibles.
+  - L'appel refusé n'a pas prolongé le blocage.
 - Abonnements : `/me/following` avec `limit=50`, soit environ 6 appels.
-- Par artiste : un appel `include_groups=album`, puis un appel `include_groups=single`, avec `limit=10` et `market` (réglé dans la config).
+- Ordre de passage :
+  - d'abord les artistes jamais vérifiés ;
+  - puis les plus en retard sur leur rythme : 2 jours pour un artiste actif (une sortie dans l'année), 7 jours pour un artiste en sommeil.
+- Par artiste déjà connu : un appel `include_groups=album,single&limit=1`, qui sert seulement à lire le `total`.
+  - Si le total n'a pas augmenté, rien de neuf : l'artiste n'a coûté qu'un appel.
+  - Sinon, ou au moins une fois par mois, on fait la lecture détaillée ci-dessous.
+- Lecture détaillée (premier passage, total en hausse, relecture mensuelle) : un appel `include_groups=album`, puis un appel `include_groups=single`, avec `limit=10` et `market` (réglé dans la config).
   - Deux appels séparés, car un appel combiné peut repousser les singles récents hors de la première page, et il ne dit plus de quel groupe vient chaque item.
+- En régime de croisière, environ 85 artistes sont vérifiés par jour, donc chacun au moins tous les 3 jours. La montée en charge prend 4 à 5 jours, car chaque artiste jamais vérifié coûte 2 appels.
+- Sur `QUOTA_EXCEEDED`, l'heure de reprise indiquée par `Retry-After` est mémorisée dans l'état, et aucun appel catalogue n'est tenté avant cette heure.
 - Page suivante seulement si tous les items de la page sont inconnus et que le plus ancien entre dans la fenêtre de 90 jours, avec 5 pages au maximum.
 - Garde-fou sur l'ordre, qui n'est pas documenté : on vérifie que `release_date` décroît. Sinon, on pagine jusqu'au plafond et on lève un avertissement.
 - EP déduit : un `single` avec `total_tracks ≥ 4` devient un `ep`, avec `type_inferred: true`.
@@ -378,7 +389,7 @@ Secrets et variables :
 
 | Ressource | Consommation par run (300 artistes) | Limite |
 |---|---|---|
-| Spotify | environ 606 appels, environ 5 min | fenêtre de 30 s dont la valeur n'est pas publiée ; quota par compte développeur, partagé avec tes runs locaux |
+| Spotify | au plus 90 appels catalogue et environ 6 appels d'abonnements, moins d'1 min | environ **100 appels catalogue par 24 h** (mesuré, non documenté), partagés par toutes les apps du compte développeur et par tes runs locaux ; plus une limite de débit sur 30 s |
 | SoundCloud | environ 600 appels et 1 token, environ 7 min | environ 100 requêtes par minute ; 50 tokens par 12 h |
 | GitHub Actions | environ 15 min par jour au pire | gratuit et illimité pour un repo public |
 | GitHub Pages | moins de 1 Mo par déploiement | site de 1 Go au plus, 100 Go par mois de bande passante, déploiement de 10 min au plus |

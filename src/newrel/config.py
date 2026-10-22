@@ -24,6 +24,13 @@ class SpotifyConfig:
     requests_per_second: float = 2.0
     time_budget_minutes: float = 15.0
     max_retry_after_seconds: float = 120.0
+    # Development Mode : environ 100 appels catalogue par 24 h, partagés entre toutes les apps
+    # du compte développeur (mesuré le 22/10/2026, non documenté).
+    daily_catalog_calls: int = 90
+    active_within_days: int = 365
+    active_interval_days: float = 2.0
+    dormant_interval_days: float = 7.0
+    full_check_days: int = 30
 
 
 @dataclass(frozen=True)

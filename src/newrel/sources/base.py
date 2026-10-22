@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from newrel.config import Config
-from newrel.models import FollowedArtist, SourceItem, Status
+from newrel.models import ArtistState, FollowedArtist, SourceItem, Status
 
 SEVERITY: dict[Status, int] = {"ok": 0, "partial": 1, "error": 2, "auth_expired": 3}
 
@@ -21,10 +21,22 @@ class SourceContext:
     now: datetime
     cutoff: date
     known_links: frozenset[str] = frozenset()
-    baselined_artists: frozenset[str] = frozenset()
-    last_checked: Mapping[str, datetime] = field(default_factory=dict)
+    artists: Mapping[str, ArtistState] = field(default_factory=dict)
+    """Artistes déjà vérifiés au moins une fois (absents : premier passage, donc baseline)."""
     previous_followings: tuple[FollowedArtist, ...] = ()
+    quota_reset_at: datetime | None = None
     accept_drop: bool = False
+
+
+@dataclass
+class ArtistCheck:
+    """Vérification d'un artiste : sorties trouvées et repères pour le prochain passage."""
+
+    items: list[SourceItem] = field(default_factory=list)
+    catalog_total: int | None = None
+    latest_release: date | None = None
+    full: bool = True
+    """Lecture détaillée ; False quand seul le total a été relu (inchangé)."""
 
 
 @dataclass
@@ -34,8 +46,11 @@ class SourceResult:
     message: str | None = None
     followings: list[FollowedArtist] | None = None
     """Nouvelle liste d'abonnements, ou None pour garder la précédente."""
-    checked: dict[str, list[SourceItem]] = field(default_factory=dict)
-    """Artistes vérifiés pendant ce run, avec les sorties trouvées."""
+    checked: dict[str, ArtistCheck] = field(default_factory=dict)
+    """Artistes vérifiés pendant ce run."""
+    pending: int = 0
+    """Artistes laissés pour un prochain run (budget d'appels atteint)."""
+    quota_reset_at: datetime | None = None
     warnings: list[str] = field(default_factory=list)
     calls: int = 0
 

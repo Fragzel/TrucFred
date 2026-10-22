@@ -64,7 +64,10 @@ function renderHeader() {
   const { data } = page;
   const parts = [`Mis à jour le ${stampFormat.format(new Date(data.generated_at))}`];
   for (const [platform, source] of Object.entries(data.sources)) {
-    parts.push(`${PLATFORM_LABELS[platform] ?? platform} : ${plural(source.followed, "artiste")} suivi${source.followed > 1 ? "s" : ""}`);
+    const followed = `${plural(source.followed, "artiste")} suivi${source.followed > 1 ? "s" : ""}`;
+    // Quota Spotify : les premiers jours, une partie des artistes n'a pas encore été vérifiée.
+    const pending = source.unchecked ? `, dont ${source.unchecked} pas encore vérifié${source.unchecked > 1 ? "s" : ""}` : "";
+    parts.push(`${PLATFORM_LABELS[platform] ?? platform} : ${followed}${pending}`);
   }
   $("#meta").textContent = parts.join(" · ");
   $("#notices").replaceChildren(

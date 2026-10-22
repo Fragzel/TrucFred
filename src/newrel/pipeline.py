@@ -35,6 +35,7 @@ class SourceReport:
     message: str | None
     calls: int
     checked: int
+    pending: int
     new_links: int
     new_releases: list[SourceItem] = field(default_factory=list)
 
@@ -113,6 +114,7 @@ def run(
                     message=result.message,
                     calls=result.calls,
                     checked=len(result.checked),
+                    pending=result.pending,
                     new_links=stats.new_links,
                     new_releases=stats.new_releases,
                 )

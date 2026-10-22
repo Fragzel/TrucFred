@@ -52,6 +52,7 @@ plateforme. Une sortie présente sur les deux plateformes n'occupe qu'une carte.
 | `uv run newrel fetch soundcloud` | Interroge SoundCloud à blanc, sans rien écrire |
 | `uv run newrel auth spotify` | Ré-autorise Spotify (voir le runbook) |
 | `uv run newrel auth soundcloud` | Vérifie l'accès SoundCloud et enregistre secrets et URN |
+| `uv run newrel auth ntfy` | Active les notifications sur ton téléphone (voir plus bas) |
 | `uv run newrel schema` | Régénère `schema/releases.schema.json` après une modification de `models.py` |
 
 Tests et qualité :
@@ -83,11 +84,39 @@ l'étoile renvoie la sortie là où elle était : « Déjà vus » si elle avait
 - **Favoris** : l'étoile d'une carte l'ajoute aux favoris. Un favori garde une copie de la
   sortie, il reste donc visible même après sa sortie de la fenêtre de 90 jours (badge
   « Archive »).
+- **Masquer un compte** : le lien « Masquer » d'une carte cache toutes les sorties dont ce
+  compte est l'artiste principal, utile pour un label trop prolifique. Les favoris restent
+  visibles. La liste « Comptes masqués » en bas de page permet de les réafficher.
+  - Le masquage ne concerne que la page.
+  - Pour ne plus du tout collecter un compte, ni recevoir de notification à son sujet,
+    ajoute-le dans `exclude`, section `[soundcloud]` de `config.toml`.
 - **Stockage** : les marques sont enregistrées dans le navigateur (localStorage). Elles ne sont
   pas synchronisées entre appareils, faute de serveur. Pour les transférer, utilise
   « Exporter » puis « Importer » en bas de page. L'import fusionne sans rien effacer.
 - **Fusions** : quand deux sorties sont fusionnées (par exemple la même sortie trouvée sur deux
   plateformes), leurs marques suivent automatiquement, grâce aux `aliases` de `releases.json`.
+
+## Notifications sur le téléphone
+
+Après chaque run qui trouve de vraies nouveautés, un message arrive sur ton téléphone via
+[ntfy](https://ntfy.sh), par exemple « 6 nouvelles sorties », suivi de la liste. Un clic ouvre
+la page.
+
+- **Mise en route** : `uv run newrel auth ntfy`.
+  - La commande tire au hasard un nom de canal et te demande de t'y abonner dans l'app ntfy
+    (Android, iOS ou navigateur).
+  - Elle envoie ensuite un message de test, puis enregistre le canal dans le secret
+    `NTFY_TOPIC`.
+- **Confidentialité** : le nom du canal fait office de mot de passe ; quiconque le connaît peut
+  lire les messages.
+- **Ce qui est notifié** :
+  - seulement les sorties apparues pendant le run, hors catalogue ;
+  - une sortie déjà vue sur une autre plateforme ne l'est pas une deuxième fois ;
+  - `types` dans `[notify]` permet par exemple de ne garder que les albums, EP et singles.
+- **Comptes masqués** : ceux masqués sur la page ne sont pas connus du serveur. Exclus-les dans
+  `config.toml` si tu ne veux plus en entendre parler.
+- **En cas d'échec** : une notification ratée ne fait pas échouer le run, elle laisse seulement
+  un avertissement.
 
 ## Doublons entre plateformes
 

@@ -114,7 +114,7 @@ export function formatHash(filters) {
 export const TABS = ["todo", "seen", "fav"];
 
 export function emptyMarks() {
-  return { version: 1, seen: {}, fav: {} };
+  return { version: 1, seen: {}, fav: {}, hidden: {} };
 }
 
 /** Marques lues depuis le stockage ; un contenu absent ou abîmé donne des marques vides. */
@@ -123,7 +123,8 @@ export function parseMarks(text) {
     const data = JSON.parse(text);
     const isMap = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
     if (data?.version === 1 && isMap(data.seen) && isMap(data.fav)) {
-      return { version: 1, seen: { ...data.seen }, fav: { ...data.fav } };
+      const hidden = isMap(data.hidden) ? { ...data.hidden } : {}; // absent avant le 22/10
+      return { version: 1, seen: { ...data.seen }, fav: { ...data.fav }, hidden };
     }
   } catch {
     // contenu illisible : on repart de zéro plutôt que de bloquer la page
@@ -144,7 +145,33 @@ export function mergeMarks(current, imported) {
     version: 1,
     seen: { ...imported.seen, ...current.seen },
     fav: { ...imported.fav, ...current.fav },
+    hidden: { ...imported.hidden, ...current.hidden },
   };
+}
+
+/** Compte masqué : on regarde l'artiste principal (l'uploader pour un son SoundCloud). */
+export function hiddenAccount(release, marks) {
+  const main = release.artists[0];
+  return Boolean(main && marks.hidden[main.id]);
+}
+
+export function toggleHidden(marks, artist, now) {
+  const hidden = { ...marks.hidden };
+  if (hidden[artist.id]) delete hidden[artist.id];
+  else hidden[artist.id] = { at: now.toISOString(), name: artist.name };
+  return { ...marks, hidden };
+}
+
+/** Comptes masqués, avec le nombre de sorties qu'ils cachent en ce moment. */
+export function hiddenAccounts(releases, marks) {
+  const counts = new Map();
+  for (const release of releases) {
+    const main = release.artists[0];
+    if (main && marks.hidden[main.id]) counts.set(main.id, (counts.get(main.id) ?? 0) + 1);
+  }
+  return Object.entries(marks.hidden)
+    .map(([id, entry]) => ({ id, name: entry.name, releases: counts.get(id) ?? 0 }))
+    .sort((a, b) => a.name.localeCompare(b.name, "fr"));
 }
 
 export function toggleSeen(marks, ids, now) {
@@ -171,7 +198,8 @@ export function tabOf(id, marks) {
   return marks.seen[id] ? "seen" : "todo";
 }
 
-/** Sorties d'un onglet. Les favoris sortis de la fenêtre reviennent depuis leur copie. */
+/** Sorties d'un onglet. Les favoris sortis de la fenêtre reviennent depuis leur copie.
+ * Les comptes masqués disparaissent de « À découvrir » et « Déjà vus », pas des favoris. */
 export function releasesForTab(releases, marks, tab) {
   if (tab === "fav") {
     const current = new Map(releases.map((release) => [release.id, release]));
@@ -179,14 +207,14 @@ export function releasesForTab(releases, marks, tab) {
       ([id, entry]) => current.get(id) ?? { ...entry.release, id, archived: true },
     );
   }
-  return releases.filter((release) => tabOf(release.id, marks) === tab);
+  return releases.filter((release) => tabOf(release.id, marks) === tab && !hiddenAccount(release, marks));
 }
 
 export function tabCounts(releases, marks) {
   const counts = { todo: 0, seen: 0, fav: Object.keys(marks.fav).length };
   for (const release of releases) {
     const tab = tabOf(release.id, marks);
-    if (tab !== "fav") counts[tab] += 1;
+    if (tab !== "fav" && !hiddenAccount(release, marks)) counts[tab] += 1;
   }
   return counts;
 }

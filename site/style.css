@@ -358,6 +358,32 @@ h1 {
   color: var(--accent);
 }
 
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.mark-hide {
+  padding: 0.15rem 0.4rem;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.72rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.hidden-box summary {
+  cursor: pointer;
+}
+
+.hidden-box ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+}
+
 .marks-tools {
   display: flex;
   flex-wrap: wrap;

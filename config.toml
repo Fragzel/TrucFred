@@ -36,3 +36,11 @@ max_pages = 3
 time_budget_minutes = 15
 max_retry_after_seconds = 120
 full_check_days = 30
+
+[notify]
+# Notification ntfy.sh après un run qui trouve des nouveautés (« uv run newrel auth ntfy »).
+# Les comptes masqués sur la page ne sont pas connus ici : exclus-les dans [soundcloud] exclude.
+site_url = "https://fragzel.github.io/TrucFred/"   # ouvert au clic sur la notification
+types = ["album", "ep", "single", "track"]          # retire "track" pour ignorer les simples sons
+max_items = 10
+server = "https://ntfy.sh"

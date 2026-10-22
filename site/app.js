@@ -6,6 +6,7 @@ import {
   emptyMarks,
   formatHash,
   groupByWeek,
+  hiddenAccounts,
   isNew,
   matches,
   mergeMarks,
@@ -17,6 +18,7 @@ import {
   tabCounts,
   tabOf,
   toggleFavorite,
+  toggleHidden,
   toggleSeen,
 } from "./logic.js";
 
@@ -245,6 +247,10 @@ function card(release, fresh) {
   seenButton.textContent = seen ? "✓ Vu" : "Déjà vu";
   seenButton.title = seen ? "Remettre dans « À découvrir »" : "Ranger dans « Déjà vus »";
   seenButton.hidden = favorite; // un favori ne vit que dans l'onglet « Favoris »
+  const main = release.artists[0];
+  const hideButton = node.querySelector(".mark-hide");
+  hideButton.hidden = favorite || !main;
+  if (main) hideButton.title = `Masquer toutes les sorties de « ${main.name} »`;
   const star = node.querySelector(".mark-fav");
   star.setAttribute("aria-pressed", String(favorite));
   star.textContent = favorite ? "★" : "☆";
@@ -290,6 +296,25 @@ function render() {
   const markAll = $("#mark-all");
   markAll.hidden = page.filters.tab !== "todo" || page.visible.length < 2;
   markAll.textContent = `Tout marquer comme vu (${page.visible.length})`;
+  renderHidden();
+}
+
+function renderHidden() {
+  const accounts = hiddenAccounts(page.data.releases, page.marks);
+  const box = $("#hidden-box");
+  box.hidden = accounts.length === 0;
+  $("#hidden-summary").textContent = `${plural(accounts.length, "compte")} masqué${accounts.length > 1 ? "s" : ""}`;
+  $("#hidden-list").replaceChildren(
+    ...accounts.map((account) => {
+      const item = document.createElement("li");
+      const button = document.createElement("button");
+      Object.assign(button, { type: "button", className: "reset unhide", textContent: "Réafficher" });
+      button.dataset.id = account.id;
+      button.dataset.name = account.name;
+      item.append(document.createTextNode(`${account.name} (${plural(account.releases, "sortie")}) `), button);
+      return item;
+    }),
+  );
 }
 
 // --- Actions sur les marques ---------------------------------------------------------------------
@@ -335,10 +360,15 @@ function findRelease(id) {
 }
 
 function onCardClick(event) {
-  const button = event.target.closest(".mark-seen, .mark-fav");
+  const button = event.target.closest(".mark-seen, .mark-fav, .mark-hide");
   if (!button) return;
   const release = findRelease(button.closest(".card").dataset.id);
   if (!release) return;
+  if (button.classList.contains("mark-hide")) {
+    const [main] = release.artists;
+    applyMarks(toggleHidden(page.marks, main, new Date()), `Sorties de « ${main.name} » masquées.`);
+    return;
+  }
   if (button.classList.contains("mark-fav")) {
     const { archived, ...snapshot } = release;
     const marks = toggleFavorite(page.marks, snapshot, new Date());
@@ -441,6 +471,12 @@ async function main() {
     button.addEventListener("keydown", onTabKey);
   }
   $("#list").addEventListener("click", onCardClick);
+  $("#hidden-list").addEventListener("click", (event) => {
+    const button = event.target.closest(".unhide");
+    if (!button) return;
+    const account = { id: button.dataset.id, name: button.dataset.name };
+    applyMarks(toggleHidden(page.marks, account, new Date()), `« ${account.name} » réaffiché.`);
+  });
   $("#mark-all").addEventListener("click", onMarkAll);
   $("#export").addEventListener("click", onExport);
   $("#import").addEventListener("change", onImport);

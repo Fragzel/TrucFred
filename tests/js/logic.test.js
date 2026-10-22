@@ -6,6 +6,7 @@ import {
   fold,
   formatHash,
   groupByWeek,
+  hiddenAccounts,
   isNew,
   localDay,
   matches,
@@ -19,6 +20,7 @@ import {
   tabCounts,
   tabOf,
   toggleFavorite,
+  toggleHidden,
   toggleSeen,
 } from "../../site/logic.js";
 
@@ -142,6 +144,25 @@ test("chaque sortie n'apparaît que dans un seul onglet, le favori l'emporte", (
   // Sans l'étoile, chacun retourne là où il était : « a » dans les vus, « c » à découvrir.
   marks = toggleFavorite(toggleFavorite(marks, releases[0], NOW), releases[2], NOW);
   assert.deepEqual([ids("todo"), ids("seen"), ids("fav")], [["c"], ["a", "b"], []]);
+});
+
+test("compte masqué : retiré des onglets sauf des favoris, et réaffichable", () => {
+  const label = { id: "a_label", name: "Exode Records" };
+  const releases = [
+    release({ id: "l1", artists: [label] }),
+    release({ id: "l2", artists: [label] }),
+    release({ id: "x", artists: [{ id: "a_x", name: "Nora" }, label] }), // label en invité
+  ];
+  let marks = toggleHidden(emptyMarks(), label, NOW);
+  marks = toggleFavorite(marks, releases[1], NOW);
+  const ids = (tab) => releasesForTab(releases, marks, tab).map((r) => r.id);
+  assert.deepEqual([ids("todo"), ids("fav")], [["x"], ["l2"]]);
+  assert.deepEqual(tabCounts(releases, marks), { todo: 1, seen: 0, fav: 1 });
+  assert.deepEqual(hiddenAccounts(releases, marks), [{ id: "a_label", name: "Exode Records", releases: 2 }]);
+  marks = toggleHidden(marks, label, NOW);
+  assert.deepEqual(ids("todo"), ["l1", "x"]);
+  const old = parseMarks('{"version": 1, "seen": {"a": "2026-10-01"}, "fav": {}}');
+  assert.deepEqual(old.hidden, {}); // marques enregistrées avant le masquage
 });
 
 test("marques : lecture tolérante, fusion de sorties et import", () => {

@@ -49,6 +49,16 @@ class SoundCloudConfig:
 
 
 @dataclass(frozen=True)
+class NotifyConfig:
+    """Notification ntfy après un run qui trouve des nouveautés (secret NTFY_TOPIC)."""
+
+    site_url: str = "https://fragzel.github.io/TrucFred/"
+    types: tuple[str, ...] = ("album", "ep", "single", "track")
+    max_items: int = 10
+    server: str = "https://ntfy.sh"
+
+
+@dataclass(frozen=True)
 class Config:
     timezone: str = "Europe/Paris"
     window_days: int = 90
@@ -60,6 +70,11 @@ class Config:
     token_error_days: int = 170
     spotify: SpotifyConfig = field(default_factory=SpotifyConfig)
     soundcloud: SoundCloudConfig = field(default_factory=SoundCloudConfig)
+    notify: NotifyConfig = field(default_factory=NotifyConfig)
+
+
+SECTIONS = ("spotify", "soundcloud", "notify")
+RELEASE_TYPES = frozenset({"album", "ep", "single", "track"})
 
 
 @dataclass(frozen=True)
@@ -73,11 +88,11 @@ class Aliases:
 
 
 def _section[T](cls: type[T], values: dict[str, Any], name: str) -> T:
-    allowed = {f.name for f in fields(cls)} - {"spotify", "soundcloud"}
+    allowed = {f.name for f in fields(cls)} - set(SECTIONS)
     unknown = sorted(set(values) - allowed)
     if unknown:
         raise ConfigError(f"[{name}] clé(s) inconnue(s) : {', '.join(unknown)}")
-    for key in ("groups", "exclude"):
+    for key in ("groups", "exclude", "types"):
         if key in values:
             values = {**values, key: tuple(values[key])}
     return cls(**values)
@@ -91,7 +106,7 @@ def load_config(path: Path) -> Config:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"{path} : {exc}") from exc
-    unknown = sorted(set(data) - {"general", "spotify", "soundcloud"})
+    unknown = sorted(set(data) - {"general", *SECTIONS})
     if unknown:
         raise ConfigError(f"{path} : section(s) inconnue(s) : {', '.join(unknown)}")
 
@@ -100,8 +115,11 @@ def load_config(path: Path) -> Config:
     if bad_groups or not spotify.groups:
         raise ConfigError(f"[spotify] groups invalides : {', '.join(bad_groups) or 'liste vide'}")
     soundcloud = _section(SoundCloudConfig, data.get("soundcloud", {}), "soundcloud")
+    notify = _section(NotifyConfig, data.get("notify", {}), "notify")
+    if bad_types := sorted(set(notify.types) - RELEASE_TYPES):
+        raise ConfigError(f"[notify] types inconnus : {', '.join(bad_types)}")
     general = _section(Config, data.get("general", {}), "general")
-    config = replace(general, spotify=spotify, soundcloud=soundcloud)
+    config = replace(general, spotify=spotify, soundcloud=soundcloud, notify=notify)
     try:
         ZoneInfo(config.timezone)
     except (ZoneInfoNotFoundError, ValueError) as exc:

@@ -12,9 +12,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from newrel import notify, site
 from newrel import releases as releases_file
-from newrel import site
 from newrel.config import Aliases, Config
+from newrel.http import HttpError
 from newrel.models import ReleasesFile, SourceItem, State
 from newrel.sources import SOURCES
 from newrel.sources.base import SourceResult, SourceSpec
@@ -46,6 +47,7 @@ class RunOutcome:
     verdict: Verdict
     state_written: bool
     reports: list[SourceReport] = field(default_factory=list)
+    notified: int = 0
 
 
 def run(
@@ -140,6 +142,14 @@ def run(
         save_state(state, state_path)
         (state_dir / "releases.json").write_text(payload, encoding="utf-8")
     site.build(site_dir, out_dir, payload)
+    notified = 0
+    wanted = not offline and bool(env.get("NTFY_TOPIC"))
+    if wanted and (fresh := notify.fresh_releases(data, now, config.notify)):
+        try:
+            notify.send(notify.payload(fresh, config.notify), env, config.notify)
+            notified = len(fresh)
+        except HttpError as exc:  # une notification ratée ne doit pas faire échouer le run
+            verdict.add("warning", f"notification non envoyée ({exc})")
     if not offline:
         evaluate(
             verdict,
@@ -150,7 +160,13 @@ def run(
             now=now,
             config=config,
         )
-    return RunOutcome(releases=data, verdict=verdict, state_written=state_written, reports=reports)
+    return RunOutcome(
+        releases=data,
+        verdict=verdict,
+        state_written=state_written,
+        reports=reports,
+        notified=notified,
+    )
 
 
 def _last_update(state: State, now: datetime) -> datetime:

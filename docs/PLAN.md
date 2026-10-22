@@ -485,7 +485,8 @@ Il reste à créer l'app (Artist Pro), lancer cette commande, puis valider sur t
 | # | Objectif | Fichiers | Terminé quand |
 |---|---|---|---|
 | 3a | Flux Atom des nouveautés, qui donne des notifications gratuites via n'importe quel lecteur RSS | `feed.py`, `site/` (balise `<link rel="alternate">`) | `feed.xml` passe le validateur W3C ; une nouveauté y apparaît le jour de sa détection |
-| 3b | Notification push après un run qui a trouvé des nouveautés (ntfy.sh) | `notify.py`, secret `NTFY_TOPIC` | une notification arrive sur le téléphone quand il y a du nouveau, et rien sinon |
+| 3b | Notification push après un run qui a trouvé des nouveautés (ntfy.sh) (**code fait le 22/10** ; reste à lancer `uv run newrel auth ntfy`) | `notify.py`, secret `NTFY_TOPIC`, `[notify]` dans `config.toml` | une notification arrive sur le téléphone quand il y a du nouveau, et rien sinon |
+| 3e | Masquer un compte depuis la page (**fait le 22/10**, ajouté à ta demande) | `site/app.js`, `site/logic.js` | un label masqué disparaît de « À découvrir » et « Déjà vus », pas des favoris ; il se réaffiche depuis la liste en bas de page |
 | 3c | « Déjà vu » et favoris (**fait le 22/10**, avancé à ta demande) | `site/app.js`, `site/logic.js`, `site/index.html` | onglets « À découvrir », « Déjà vus » et « Favoris » ; bouton « Déjà vu » et étoile sur chaque carte ; marques en localStorage indexées par l'identifiant stable ; favoris gardés en copie au-delà de la fenêtre de 90 jours ; export et import en JSON ; les marques survivent à une fusion grâce aux alias |
 | 3d | Page « Artistes » : les plateformes de chaque artiste et les candidats à la fusion | `site/artists.html` | on peut remplir `aliases.toml` sans lire les logs |
 

@@ -66,9 +66,11 @@ def _parser() -> argparse.ArgumentParser:
     auth = commands.add_parser(
         "auth", help="mise en route d'une source (Spotify : à refaire tous les ~6 mois)"
     )
-    auth.add_argument("source", choices=["spotify", "soundcloud"])
+    auth.add_argument("source", choices=["spotify", "soundcloud", "ntfy"])
     auth.add_argument("--port", type=int, default=8888, help="Spotify : port du retour OAuth")
     auth.add_argument("--profile", help="SoundCloud : adresse de ton profil soundcloud.com")
+    auth.add_argument("--topic", help="ntfy : réutiliser un sujet existant plutôt qu'en tirer un")
+    auth.add_argument("--config", type=Path, default=Path("config.toml"))
     auth.add_argument("--no-gh", action="store_true", help="n'enregistre pas les secrets avec gh")
     auth.add_argument("--repo", help="dépôt GitHub cible (par défaut : celui du dossier courant)")
     auth.add_argument(
@@ -113,7 +115,10 @@ def _summary(outcome: pipeline.RunOutcome) -> str:
         )
     if not outcome.reports:
         lines.append("| — | aucune collecte | | | | |")
-    lines += ["", f"{len(outcome.releases.releases)} sorties publiées sur la page.", ""]
+    lines += ["", f"{len(outcome.releases.releases)} sorties publiées sur la page."]
+    if outcome.notified:
+        lines.append(f"Notification envoyée pour {outcome.notified} nouveauté(s).")
+    lines.append("")
     for level, message in outcome.verdict.messages:
         lines.append(f"- {'🔴' if level == 'error' else '🟡'} {message}")
     news = [item for report in outcome.reports for item in report.new_releases]
@@ -144,6 +149,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
             f" dont {len(report.new_releases)} nouveautés"
         )
     print(f"{len(outcome.releases.releases)} sorties publiées, verdict : {outcome.verdict.level}")
+    if outcome.notified:
+        print(f"Notification envoyée pour {outcome.notified} nouveauté(s).")
     for level, message in outcome.verdict.messages:
         _annotate(level, message)
     _github_file(
@@ -194,6 +201,16 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
 
 def _cmd_auth(args: argparse.Namespace) -> int:
     env_file = Path(".env.local") if args.write_env else None
+    if args.source == "ntfy":
+        from newrel.notify import setup as setup_ntfy
+
+        return setup_ntfy(
+            config=load_config(args.config).notify,
+            topic=args.topic,
+            use_gh=not args.no_gh,
+            repo=args.repo,
+            env_file=env_file,
+        )
     if args.source == "soundcloud":
         from newrel.sources.soundcloud_auth import setup
 

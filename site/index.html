@@ -44,6 +44,10 @@
         <button id="export" type="button" class="reset">Exporter</button>
         <label class="reset import">Importer<input id="import" type="file" accept="application/json,.json"></label>
       </p>
+      <details id="hidden-box" class="hidden-box" hidden>
+        <summary id="hidden-summary"></summary>
+        <ul id="hidden-list"></ul>
+      </details>
       <p>
         Données fournies par <a href="https://open.spotify.com" rel="noopener">Spotify</a>
         et <a href="https://soundcloud.com" rel="noopener">SoundCloud</a>, chaque son étant crédité
@@ -73,7 +77,10 @@
           <p class="artists"></p>
           <p class="details"><time class="date"></time><span class="tracks"></span></p>
           <p class="links"></p>
-          <p class="actions"><button class="mark-seen" type="button" aria-pressed="false">Déjà vu</button></p>
+          <p class="actions">
+            <button class="mark-seen" type="button" aria-pressed="false">Déjà vu</button>
+            <button class="mark-hide" type="button">Masquer</button>
+          </p>
         </div>
       </li>
     </template>

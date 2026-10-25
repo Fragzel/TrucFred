@@ -7,8 +7,9 @@ le [plan](docs/PLAN.md).
 
 - **Collecte** : un workflow GitHub Actions planifié (tous les jours vers 6 h 17, heure de Paris)
   lance `newrel`, un script Python.
-- **État** : la branche `data` contient `state.json` et `releases.json`. Elle est réécrite à
-  chaque run, en un seul commit sans historique.
+- **État** : la branche `data` contient `state.json` et `releases.json`, chiffrés quand la page
+  est protégée par mot de passe. Elle est réécrite à chaque run, en un seul commit sans
+  historique.
 - **Site** : HTML et JavaScript natif, sans build, servi par GitHub Pages à l'adresse
   <https://fragzel.github.io/TrucFred/>.
 
@@ -54,7 +55,9 @@ le [plan](docs/PLAN.md).
      `--write-env` les écrit aussi dans `.env.local`, dont la commande de tri a besoin.
 9. **Tri des abonnements** : `uv run newrel triage youtube`, puis commite `youtube.toml` (voir
    [Tri des abonnements YouTube](#tri-des-abonnements-youtube)).
-10. **Premier run** : `gh workflow run update.yml`, ou attendre le passage du lendemain matin.
+10. **Mot de passe de la page** : `uv run newrel auth site --write-env` (voir
+    [Page protégée par mot de passe](#page-protégée-par-mot-de-passe)).
+11. **Premier run** : `gh workflow run update.yml`, ou attendre le passage du lendemain matin.
     - Le premier passage sur un artiste range dans l'historique ce qui a plus de 14 jours (pas de
       badge « Nouveau ») ; une sortie plus récente garde son badge.
     - Les vraies nouveautés apparaissent à partir du run suivant.
@@ -73,13 +76,14 @@ le [plan](docs/PLAN.md).
 | `uv run newrel auth soundcloud` | Vérifie l'accès SoundCloud et enregistre secrets et URN |
 | `uv run newrel auth youtube` | Vérifie la clé API et la chaîne YouTube (abonnements publics), puis enregistre clé et chaîne |
 | `uv run newrel auth ntfy` | Active les notifications sur ton téléphone (voir plus bas) |
+| `uv run newrel auth site` | Définit ou change le mot de passe de la page (voir plus bas) |
 | `uv run newrel schema` | Régénère `schema/releases.schema.json` après une modification de `models.py` |
 
 Tests et qualité :
 
 ```
 uv run pytest
-node --test tests/js/logic.test.js
+node --test tests/js/logic.test.js tests/js/vault.test.js
 uv run ruff check
 uv run ruff format
 ```
@@ -244,6 +248,43 @@ page affiche un bandeau avec un bouton « Lancer la mise à jour » :
   Un token refusé par GitHub (expiré ou révoqué) est oublié automatiquement. « Oublier le
   token », en bas de page, le retire à la main.
 
+## Page protégée par mot de passe
+
+Le dépôt est public : sans protection, n'importe qui peut lire la page, la branche `data`, les
+artefacts et les résumés des runs. Avec un mot de passe, tout cela est chiffré.
+
+- **Mise en route** : `uv run newrel auth site`.
+  - Laisse le champ vide pour tirer un mot de passe au hasard (5 groupes de 4 lettres, facile à
+    taper sur un téléphone), puis range-le dans ton gestionnaire de mots de passe.
+  - La commande enregistre le secret `SITE_PASSWORD` et, la première fois, `STATE_KEY` (la clé
+    de l'état). Le run complet suivant chiffre tout ; pour ne pas attendre :
+    `gh workflow run update.yml`, sans `offline`, qui ne réécrirait pas la branche `data`.
+- **Sur la page** : le mot de passe est demandé à la première visite.
+  - « Se souvenir de cet appareil » garde dans le navigateur la clé de déchiffrement, pas le mot
+    de passe. Cette clé ne peut pas être relue, seulement utilisée par les pages de
+    `<toi>.github.io`.
+  - « Verrouiller cet appareil », en bas de page, l'oublie.
+- **Ce qui est chiffré** (AES-256-GCM) :
+  - `releases.json` (page, branche `data`, artefacts), avec une clé dérivée du mot de passe
+    (PBKDF2-SHA256, 600 000 itérations) ;
+  - `state.json`, avec `STATE_KEY`, une clé aléatoire indépendante du mot de passe : changer de
+    mot de passe ne fait donc pas perdre l'état ;
+  - le résumé des runs ne cite plus aucun titre, seulement des chiffres.
+- **Changer de mot de passe** : relance `uv run newrel auth site`. Après le run suivant, chaque
+  appareil redemande le mot de passe une fois.
+- **Garde-fou** : si le secret `SITE_PASSWORD` disparaît, le run s'arrête au lieu de republier la
+  page en clair.
+- **Limites** :
+  - sans serveur, rien ne limite les essais : qui copie les données peut tester des mots de passe
+    hors ligne. D'où le tirage au hasard (environ 94 bits) ; un mot de passe choisi doit faire au
+    moins 12 caractères ;
+  - restent publics : le code, les compteurs des logs (appels, nouveautés) et la taille des
+    données ;
+  - tes abonnements SoundCloud restent visibles sur SoundCloud lui-même.
+- **Runs locaux** : `newrel run`, `fetch` et `serve` ont besoin de `STATE_KEY` et
+  `SITE_PASSWORD` pour lire la branche `data`. Ajoute `--write-env` dès la première mise en route :
+  GitHub ne rend jamais la valeur d'un secret.
+
 ## Runbook
 
 | Situation | Quoi faire |
@@ -260,17 +301,22 @@ page affiche un bandeau avec un bouton « Lancer la mise à jour » :
 | Avertissement « YouTube : N chaîne(s) à trier » | `uv run newrel triage youtube`, puis commite et pousse `youtube.toml`. |
 | YouTube suit une chaîne qui n'est pas un artiste | `uv run newrel triage youtube --all`, ou ajoute son identifiant (`UC…`) ou son handle (`@…`) dans `ignore` de `youtube.toml`. |
 | Un artiste YouTube manque | Ajoute son identifiant ou son handle dans `artists` de `youtube.toml`. |
+| Run rouge « la page est protégée mais le secret SITE_PASSWORD est absent » | Le secret a été supprimé : `uv run newrel auth site`. Rien n'a été publié en clair. |
+| Run rouge « state.json illisible » qui cite `STATE_KEY` ou un déchiffrement impossible | `STATE_KEY` a disparu ou changé. Si tu as encore la bonne valeur (dans `.env.local`), remets-la avec `gh secret set STATE_KEY`. Sinon, repars de zéro. |
+| Mot de passe de la page oublié | `uv run newrel auth site` en définit un nouveau, sans toucher à l'état. |
 | Repartir de zéro | `git push origin --delete data`, puis relance le workflow. |
 
 ## Confidentialité et conditions d'utilisation
 
-- Le dépôt est public : la liste des artistes suivis (`releases.json`, branche `data`) et les
-  logs Actions sont lisibles par tous.
+- Le dépôt est public : le code et les logs Actions sont lisibles par tous. Les données (artistes
+  suivis, sorties) ne sont chiffrées que si la page est
+  [protégée par mot de passe](#page-protégée-par-mot-de-passe).
 - YouTube : les abonnements de la chaîne suivie sont publics sur YouTube, condition pour les
   lire sans autorisation. Côté dépôt, seules les chaînes musicales suivies sont enregistrées
   dans l'état, et les logs ne nomment jamais une chaîne écartée ou douteuse (seulement leur
   nombre). `youtube.toml` est public lui aussi, avec le nom de chaque chaîne que tu y as rangée.
-- La page est en `noindex`, mais reste accessible à qui en connaît l'URL.
+- La page est en `noindex`, n'envoie pas son adresse aux sites qu'elle ouvre (`no-referrer`), et
+  sa politique de sécurité (CSP) n'exécute que ses propres scripts.
 - Aucun secret n'est versionné, et les tokens obtenus pendant un run sont masqués dans les logs.
 - Le token du bouton « Lancer la mise à jour » reste dans le navigateur. Son stockage est
   partagé avec tes autres sites `<toi>.github.io`. S'il fuitait, il ne permettrait que de lancer

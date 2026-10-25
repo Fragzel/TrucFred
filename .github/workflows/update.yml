@@ -37,6 +37,10 @@ jobs:
       state_written: ${{ steps.run.outputs.state_written }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Pas de token dans .git/config pour les dépendances Python ; le dépôt public suffit
+          # à lire la branche data.
+          persist-credentials: false
 
       - name: Récupérer l'état (branche data)
         run: |
@@ -75,6 +79,8 @@ jobs:
           YOUTUBE_CHANNEL_ID: ${{ vars.YOUTUBE_CHANNEL_ID }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+          SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
+          STATE_KEY: ${{ secrets.STATE_KEY }}
         run: |
           args=()
           if [ "$OFFLINE" = "true" ]; then args+=(--offline); fi

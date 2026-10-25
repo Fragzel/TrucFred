@@ -2,6 +2,9 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8">
+    <!-- Scripts du site seulement ; les données ne peuvent partir que vers GitHub (lancement manuel). -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self' https://api.github.com; base-uri 'none'">
+    <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
     <meta name="color-scheme" content="light dark">
@@ -16,6 +19,15 @@
         <h1>Nouvelles sorties</h1>
         <p id="meta" class="meta"></p>
       </div>
+      <form id="unlock" class="unlock" hidden>
+        <p>Cette page est protégée par un mot de passe.</p>
+        <label class="run-token">Mot de passe
+          <input id="password" type="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" required>
+        </label>
+        <label class="toggle"><input id="remember" type="checkbox" checked> Se souvenir de cet appareil</label>
+        <p id="unlock-error" class="run-error" role="alert" hidden>Mot de passe incorrect.</p>
+        <p class="run-buttons"><button type="submit" class="run-now">Ouvrir</button></p>
+      </form>
       <p id="rotation" class="meta rotation" hidden></p>
       <div id="notices" role="status"></div>
       <div id="late" class="notice notice-warning late" hidden>
@@ -51,6 +63,10 @@
       <p id="token-tools" class="marks-tools" hidden>
         Un token GitHub est enregistré dans ce navigateur pour lancer la mise à jour.
         <button id="forget-token" type="button" class="reset">Oublier le token</button>
+      </p>
+      <p id="lock-tools" class="marks-tools" hidden>
+        Page protégée par mot de passe.
+        <button id="lock" type="button" class="reset">Verrouiller cet appareil</button>
       </p>
       <details id="hidden-box" class="hidden-box" hidden>
         <summary id="hidden-summary"></summary>

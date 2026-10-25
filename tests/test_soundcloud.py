@@ -4,9 +4,24 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from newrel.http import HttpError
 from newrel.models import ArtistState, FollowedArtist
-from newrel.sources.soundcloud import playlist_to_item, release_type, track_to_item
-from tests.helpers import CONFIG, ENV, NOW, SC_ENV, collect_soundcloud_quickly, make_context
+from newrel.sources.soundcloud import (
+    TOKEN_URL,
+    SoundCloudApi,
+    playlist_to_item,
+    release_type,
+    track_to_item,
+)
+from tests.helpers import (
+    CONFIG,
+    ENV,
+    NOW,
+    SC_ENV,
+    collect_soundcloud_quickly,
+    make_context,
+    quick_http,
+)
 from tests.soundcloud_fake import sc_playlist, sc_track, sc_user
 
 PARIS = ZoneInfo("Europe/Paris")
@@ -140,3 +155,15 @@ def test_comptes_suivis_refuses_en_client_credentials(fake_soundcloud) -> None:
     assert "Client Credentials" in result.message
     assert result.followings is None
     assert list(result.checked) == ["soundcloud:users:10"]  # la liste précédente reste vérifiée
+
+
+def test_jeton_jamais_envoye_hors_de_l_api(router) -> None:
+    router.post(TOKEN_URL).respond(200, json={"access_token": "sc-token"})
+    router.route(host="api.soundcloud.com", path="/users/1/followings").respond(
+        200, json={"collection": [], "next_href": "https://evil.example/next"}
+    )
+    evil = router.route(host="evil.example").respond(200, json={"collection": []})
+    api = SoundCloudApi(quick_http(), "sc-client-id", "sc-client-secret")
+    with pytest.raises(HttpError, match="hors de l'API"):
+        api.collection("/users/1/followings", {}, max_pages=3)
+    assert not evil.called

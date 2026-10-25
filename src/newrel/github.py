@@ -39,6 +39,22 @@ def set_secret(name: str, value: str, *, repo: str | None = None, token: str | N
     return _gh(args, stdin=value, token=token)
 
 
+def secret_names(repo: str | None = None) -> set[str] | None:
+    """Noms des secrets du dépôt (GitHub n'en rend jamais la valeur) ; None en cas d'échec."""
+    args = ["secret", "list", "--json", "name", "--jq", ".[].name"]
+    try:
+        completed = subprocess.run(
+            ["gh", *args, *(["--repo", repo] if repo else [])],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+    except OSError, subprocess.TimeoutExpired:
+        return None
+    return set(completed.stdout.split()) if completed.returncode == 0 else None
+
+
 def set_variable(name: str, value: str, *, repo: str | None = None) -> bool:
     args = ["variable", "set", name, "--body", value, *(["--repo", repo] if repo else [])]
     return _gh(args)

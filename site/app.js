@@ -8,6 +8,7 @@ import {
   groupByWeek,
   hiddenAccounts,
   isNew,
+  lateSources,
   matches,
   mergeMarks,
   migrateMarks,
@@ -37,6 +38,16 @@ const EMPTY_TAB = {
   fav: "Aucun favori : clique sur l'étoile d'une sortie pour l'ajouter ici.",
 };
 const STORAGE_KEY = "newrel.marks";
+const TOKEN_KEY = "newrel.githubToken";
+const DISPATCHED_KEY = "newrel.dispatchedAt";
+const DISPATCH_PAUSE_MS = 30 * 60_000; // le temps que le run se lance, tourne et redéploie la page
+// Création d'un token « fine-grained » pré-remplie : seule la permission Actions (écriture).
+const TOKEN_URL = `https://github.com/settings/personal-access-tokens/new?${new URLSearchParams({
+  name: "Nouvelles sorties : lancement manuel",
+  description: "Lance la mise à jour (workflow update.yml) depuis la page.",
+  expires_in: "366",
+  actions: "write",
+})}`;
 
 const dayFormat = new Intl.DateTimeFormat("fr-FR", {
   weekday: "short",
@@ -70,6 +81,25 @@ function saveMarks() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(page.marks));
   } catch {
     showToast("Stockage du navigateur indisponible : tes marques seront perdues à la fermeture.");
+  }
+}
+
+function readSetting(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/** Enregistre (ou efface avec null) un réglage ; false si le navigateur refuse. */
+function writeSetting(key, value) {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -123,6 +153,9 @@ function rotationText(platform, source) {
   if (source.unchecked) {
     parts.push(`${source.unchecked} pas encore vérifié${s(source.unchecked)} (premiers jours).`);
   }
+  if (source.next_check_at && Date.parse(source.next_check_at) > page.now.getTime()) {
+    parts.push(`Prochaine vérification possible le ${stampFormat.format(new Date(source.next_check_at))}.`);
+  }
   return parts.join(" ");
 }
 
@@ -147,6 +180,91 @@ function renderHeader() {
       return paragraph;
     }),
   );
+  renderLate();
+}
+
+// --- Lancement manuel ----------------------------------------------------------------------------
+// GitHub retarde souvent le cron de plusieurs heures. Quand un passage est en retard, la page
+// propose de lancer le workflow : via un token « Actions » gardé dans ce navigateur, ou sur GitHub.
+
+const repository = () => (/^[\w.-]+\/[\w.-]+$/.test(page.data.repository ?? "") ? page.data.repository : null);
+
+function renderLate() {
+  const { data } = page;
+  const late = repository() ? lateSources(data, page.now) : [];
+  const dispatched = Number(readSetting(DISPATCHED_KEY)) || 0;
+  const box = $("#late");
+  box.hidden = !late.length || page.now.getTime() - dispatched < DISPATCH_PAUSE_MS;
+  $("#token-tools").hidden = !readSetting(TOKEN_KEY);
+  if (box.hidden) return;
+  const planned = data.schedule.time.replace(/^0?(\d+):(\d+)$/, "$1 h $2");
+  const quotaBack = late.join() === "spotify" && data.sources.spotify.next_check_at;
+  const hour = new Intl.DateTimeFormat("fr-FR", { timeStyle: "short", timeZone: data.timezone });
+  $("#late-text").textContent = quotaBack
+    ? `Le quota Spotify est de nouveau disponible depuis ${hour.format(new Date(quotaBack))}, mais aucune mise à jour ne l'a utilisé.`
+    : `La mise à jour prévue à ${planned} n'a pas encore tourné : GitHub retarde parfois les tâches planifiées.`;
+}
+
+function openRunDialog(error = "") {
+  $("#run-github").href = `https://github.com/${repository()}/actions/workflows/update.yml`;
+  $("#run-token-link").href = TOKEN_URL;
+  $("#run-token").value = "";
+  const message = $("#run-error");
+  message.textContent = error;
+  message.hidden = !error;
+  $("#run-dialog").showModal();
+}
+
+async function dispatch(token) {
+  const button = $("#run-now");
+  button.disabled = true;
+  try {
+    const response = await fetch(`https://api.github.com/repos/${repository()}/actions/workflows/update.yml/dispatches`, {
+      method: "POST",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      body: JSON.stringify({ ref: "main" }),
+    });
+    if (response.status === 204) {
+      writeSetting(DISPATCHED_KEY, String(Date.now()));
+      $("#late").hidden = true;
+      showToast("Mise à jour lancée : recharge la page dans une dizaine de minutes.");
+    } else if ([401, 403, 404].includes(response.status)) {
+      // Token expiré, révoqué ou sans la permission « Actions » sur ce dépôt : on l'oublie.
+      writeSetting(TOKEN_KEY, null);
+      renderLate();
+      const reason = response.status === 401 ? "expiré ou révoqué" : "sans la permission « Actions : Read and write » sur ce dépôt";
+      openRunDialog(`GitHub a refusé le token (${reason}) : il a été oublié.`);
+    } else {
+      showToast(`GitHub n'a pas lancé la mise à jour (HTTP ${response.status}) : réessaie plus tard.`);
+    }
+  } catch {
+    showToast("GitHub est injoignable : réessaie dans un instant.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function onRunNow() {
+  const token = readSetting(TOKEN_KEY);
+  if (token) dispatch(token);
+  else openRunDialog();
+}
+
+function onRunDialogSubmit(event) {
+  if (event.submitter?.value !== "save") return; // « Fermer »
+  const token = $("#run-token").value.trim();
+  if (!token) {
+    event.preventDefault();
+    $("#run-token").focus();
+    return;
+  }
+  if (!writeSetting(TOKEN_KEY, token)) showToast("Stockage du navigateur indisponible : le token ne sera pas gardé.");
+  renderLate();
+  dispatch(token);
 }
 
 // --- Filtres -------------------------------------------------------------------------------------
@@ -476,6 +594,13 @@ async function main() {
     if (!button) return;
     const account = { id: button.dataset.id, name: button.dataset.name };
     applyMarks(toggleHidden(page.marks, account, new Date()), `« ${account.name} » réaffiché.`);
+  });
+  $("#run-now").addEventListener("click", onRunNow);
+  $("#run-form").addEventListener("submit", onRunDialogSubmit);
+  $("#forget-token").addEventListener("click", () => {
+    writeSetting(TOKEN_KEY, null);
+    renderLate();
+    showToast("Token GitHub oublié par ce navigateur.");
   });
   $("#mark-all").addEventListener("click", onMarkAll);
   $("#export").addEventListener("click", onExport);

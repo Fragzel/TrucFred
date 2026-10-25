@@ -233,6 +233,25 @@
       "title": "Rules",
       "type": "object"
     },
+    "Schedule": {
+      "additionalProperties": false,
+      "properties": {
+        "time": {
+          "title": "Time",
+          "type": "string"
+        },
+        "grace_minutes": {
+          "title": "Grace Minutes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "time",
+        "grace_minutes"
+      ],
+      "title": "Schedule",
+      "type": "object"
+    },
     "SourceSummary": {
       "additionalProperties": false,
       "properties": {
@@ -319,6 +338,32 @@
           ],
           "default": null,
           "title": "Quota Reset At"
+        },
+        "last_attempt_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Attempt At"
+        },
+        "next_check_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Next Check At"
         }
       },
       "title": "SourceSummary",
@@ -347,6 +392,29 @@
     },
     "rules": {
       "$ref": "#/$defs/Rules"
+    },
+    "schedule": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Schedule"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "repository": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Repository"
     },
     "sources": {
       "additionalProperties": {

@@ -68,6 +68,9 @@ class SourceState(Model):
     quota_reset_at: datetime | None = None
     """Quota épuisé : aucun appel catalogue avant cette date (indiquée par Retry-After)."""
     checked_last_run: int = 0
+    catalog_used_at: datetime | None = None
+    """Dernier run qui a interrogé le catalogue : la fenêtre de quota de 24 h part d'ici."""
+    next_check_at: datetime | None = None
 
 
 class ArtistState(Model):
@@ -150,6 +153,15 @@ class SourceSummary(Model):
     oldest_check_at: datetime | None = None
     """Vérification la plus ancienne parmi les artistes suivis : le « retard » maximal."""
     quota_reset_at: datetime | None = None
+    last_attempt_at: datetime | None = None
+    next_check_at: datetime | None = None
+    """Spotify : quand le quota permet un nouveau passage ; la page s'en sert pour le bouton."""
+
+
+class Schedule(Model):
+    time: str
+    """Heure locale du run planifié (cron), par exemple « 06:17 »."""
+    grace_minutes: int
 
 
 class Rules(Model):
@@ -164,6 +176,9 @@ class ReleasesFile(Model):
     timezone: str
     window_days: int
     rules: Rules
+    schedule: Schedule | None = None
+    repository: str | None = None
+    """« propriétaire/dépôt » GitHub, pour le bouton de lancement manuel."""
     sources: dict[str, SourceSummary]
     aliases: dict[str, str] = Field(default_factory=dict)
     """Ancien identifiant → identifiant actuel, quand deux sorties ont été fusionnées."""

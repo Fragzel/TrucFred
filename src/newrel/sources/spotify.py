@@ -28,6 +28,7 @@ REQUIRED_ENV = ("SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET", "SPOTIFY_REFRESH_T
 API_URL = "https://api.spotify.com/v1"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 PAGE_LIMIT = 10  # maximum accepté par GET /artists/{id}/albums depuis 2026
+QUOTA_MARGIN = timedelta(minutes=10)  # le run de la veille a étalé ses appels sur une minute
 REAUTH_HINT = "ré-autorise Spotify avec « uv run newrel auth spotify »"
 
 
@@ -172,6 +173,7 @@ def collect(
         artists = _followings(api, ctx, result)
         if artists:
             _catalog(api, ctx, result, artists, clock)
+        _record_window(api, ctx, result)
     finally:
         result.calls = client.calls
         if http is None:
@@ -227,6 +229,11 @@ def _catalog(
         stamp = _local(ctx.quota_reset_at, ctx)
         result.degrade("partial", f"quota épuisé jusqu'au {stamp} : aucun artiste vérifié")
         return
+    if (opens := _window_opens(ctx)) and ctx.now < opens:
+        # Le quota de la veille court encore : un run manuel ou un cron en avance n'y touche pas.
+        result.pending = len(artists)
+        result.message = f"quota de 24 h : prochaine vérification possible le {_local(opens, ctx)}"
+        return
     try:
         api.app_token()
     except HttpError as exc:
@@ -261,6 +268,26 @@ def _catalog(
             result.pending = postponed
             return
         result.checked[artist.key] = check
+
+
+def _window_end(used_at: datetime | None, ctx: SourceContext) -> datetime | None:
+    """Fin de la fenêtre de quota ouverte par un run qui a interrogé le catalogue (0 h : aucune)."""
+    hours = ctx.config.spotify.quota_window_hours
+    if used_at is None or hours <= 0:
+        return None
+    return used_at + timedelta(hours=hours) + QUOTA_MARGIN
+
+
+def _window_opens(ctx: SourceContext) -> datetime | None:
+    return _window_end(ctx.catalog_used_at, ctx)
+
+
+def _record_window(api: SpotifyApi, ctx: SourceContext, result: SourceResult) -> None:
+    """Retient quand le catalogue redevient interrogeable (affiché sur la page)."""
+    result.catalog_used_at = ctx.now if api.catalog_calls else ctx.catalog_used_at
+    opens = _window_end(result.catalog_used_at, ctx)
+    moments = [moment for moment in (opens, result.quota_reset_at) if moment]
+    result.next_check_at = max(moments, default=None)
 
 
 def _local(moment: datetime, ctx: SourceContext) -> str:

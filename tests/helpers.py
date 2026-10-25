@@ -21,7 +21,8 @@ SC_ENV = {
     "SOUNDCLOUD_USER_URN": "soundcloud:users:1",
 }
 CONFIG = Config(
-    spotify=SpotifyConfig(requests_per_second=0),
+    # Sans fenêtre de quota : les tests enchaînent des runs à 24 h d'intervalle tout pile.
+    spotify=SpotifyConfig(requests_per_second=0, quota_window_hours=0),
     soundcloud=SoundCloudConfig(requests_per_second=0),
 )
 

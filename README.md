@@ -155,6 +155,32 @@ ton compte développeur ainsi que par `newrel fetch` en local.
   chacun. La page indique combien restent à vérifier.
 - **Si le quota est épuisé** : l'heure de reprise, donnée par `Retry-After`, est mémorisée.
   Aucun appel catalogue n'est fait avant cette heure, mais les abonnements continuent d'être lus.
+- **Un seul passage par 24 h** : le quota court sur 24 h à partir du passage précédent. Un run
+  lancé plus tôt (à la main, ou un cron en avance) lit les abonnements mais ne touche pas au
+  catalogue. La page affiche l'heure de la prochaine vérification possible ; le délai se règle
+  avec `quota_window_hours` dans `config.toml`.
+
+## Lancer la mise à jour à la main
+
+GitHub retarde souvent le cron de 6 h 17 de plusieurs heures. Quand un passage est en retard, la
+page affiche un bandeau avec un bouton « Lancer la mise à jour » :
+
+- **Quand il apparaît** :
+  - aucun run n'a eu lieu depuis 6 h 17, 45 minutes après l'heure prévue (`schedule_time` et
+    `schedule_grace_minutes` dans `config.toml`) ;
+  - ou le quota Spotify de 24 h est revenu sans qu'aucun run ne l'ait utilisé.
+- **Après un clic**, le bouton disparaît pendant 30 minutes, le temps que le run tourne et
+  redéploie la page.
+- **Sans token**, le bouton ouvre une fenêtre avec le lien vers le workflow sur GitHub : il reste
+  à cliquer sur « Run workflow ».
+- **Avec un token**, le clic lance directement le run. Pour en créer un :
+  - suis le lien « créer un token GitHub » de la fenêtre ; il pré-remplit un token
+    *fine-grained* valable un an, avec la seule permission *Actions : Read and write* ;
+  - dans « Repository access », choisis « Only select repositories », puis ce dépôt ;
+  - colle le token dans la fenêtre.
+- **Où vit le token** : uniquement dans le localStorage de ce navigateur, jamais dans le dépôt.
+  Un token refusé par GitHub (expiré ou révoqué) est oublié automatiquement. « Oublier le
+  token », en bas de page, le retire à la main.
 
 ## Runbook
 
@@ -175,6 +201,9 @@ ton compte développeur ainsi que par `newrel fetch` en local.
   logs Actions sont lisibles par tous.
 - La page est en `noindex`, mais reste accessible à qui en connaît l'URL.
 - Aucun secret n'est versionné, et les tokens obtenus pendant un run sont masqués dans les logs.
+- Le token du bouton « Lancer la mise à jour » reste dans le navigateur. Son stockage est
+  partagé avec tes autres sites `<toi>.github.io`. S'il fuitait, il ne permettrait que de lancer
+  ou d'annuler des runs de ce dépôt, sans lire ni modifier ses fichiers ou ses secrets.
 - Usage strictement personnel :
   - chaque sortie renvoie vers Spotify, avec son logo ;
   - il n'y a aucun lecteur embarqué ;

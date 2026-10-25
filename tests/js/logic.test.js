@@ -8,6 +8,7 @@ import {
   groupByWeek,
   hiddenAccounts,
   isNew,
+  lateSources,
   localDay,
   matches,
   mergeMarks,
@@ -22,6 +23,7 @@ import {
   toggleFavorite,
   toggleHidden,
   toggleSeen,
+  zonedInstant,
 } from "../../site/logic.js";
 
 const RULES = { new_days: 7, new_max_age_days: 14, stale_hours: 36 };
@@ -163,6 +165,33 @@ test("compte masqué : retiré des onglets sauf des favoris, et réaffichable", 
   assert.deepEqual(ids("todo"), ["l1", "x"]);
   const old = parseMarks('{"version": 1, "seen": {"a": "2026-10-01"}, "fav": {}}');
   assert.deepEqual(old.hidden, {}); // marques enregistrées avant le masquage
+});
+
+test("heure locale → instant, de part et d'autre du passage à l'heure d'hiver", () => {
+  assert.equal(new Date(zonedInstant("2026-10-24", "06:17", "Europe/Paris")).toISOString(), "2026-10-24T04:17:00.000Z");
+  assert.equal(new Date(zonedInstant("2026-10-25", "06:17", "Europe/Paris")).toISOString(), "2026-10-25T05:17:00.000Z");
+});
+
+test("bouton de lancement : seulement pour une source en retard", () => {
+  const data = (sources) => ({ timezone: "Europe/Paris", schedule: { time: "06:17", grace_minutes: 45 }, sources });
+  const at = (iso) => new Date(iso);
+  const ranYesterday = {
+    spotify: { last_attempt_at: "2026-10-24T09:48:00Z", next_check_at: "2026-10-25T09:58:00Z" },
+    soundcloud: { last_attempt_at: "2026-10-24T09:48:00Z", next_check_at: null },
+  };
+  // 6 h 40 : on laisse encore sa chance au cron (prévu à 6 h 17, 45 min de marge).
+  assert.deepEqual(lateSources(data(ranYesterday), at("2026-10-25T05:40:00Z")), []);
+  // 8 h 30 : pas de run aujourd'hui ; SoundCloud est en retard, Spotify attend son quota (10 h 58).
+  assert.deepEqual(lateSources(data(ranYesterday), at("2026-10-25T07:30:00Z")), ["soundcloud"]);
+  // 11 h 30 : le quota Spotify est revenu et personne ne l'a utilisé.
+  assert.deepEqual(lateSources(data(ranYesterday), at("2026-10-25T10:30:00Z")), ["spotify", "soundcloud"]);
+  // Le run est passé à 10 h 59 : plus rien n'est en retard.
+  const ranToday = {
+    spotify: { last_attempt_at: "2026-10-25T09:59:00Z", next_check_at: "2026-10-26T10:09:00Z" },
+    soundcloud: { last_attempt_at: "2026-10-25T09:59:00Z", next_check_at: null },
+  };
+  assert.deepEqual(lateSources(data(ranToday), at("2026-10-25T10:30:00Z")), []);
+  assert.deepEqual(lateSources({ ...data(ranYesterday), schedule: null }, at("2026-10-25T10:30:00Z")), []);
 });
 
 test("marques : lecture tolérante, fusion de sorties et import", () => {

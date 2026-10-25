@@ -57,6 +57,9 @@ def context_for(
         artists={key: artist for key, artist in state.artists.items() if key.startswith(prefix)},
         previous_followings=tuple(source.followings),
         quota_reset_at=source.quota_reset_at,
+        # État d'avant le 25/10 : le dernier run qui a vérifié des artistes a ouvert la fenêtre.
+        catalog_used_at=source.catalog_used_at
+        or (source.last_attempt_at if source.checked_last_run else None),
         accept_drop=accept_drop,
     )
 
@@ -89,6 +92,8 @@ def apply_result(
         source.last_success_at = now
     source.quota_reset_at = result.quota_reset_at
     source.checked_last_run = len(result.checked)
+    source.catalog_used_at = result.catalog_used_at or source.catalog_used_at
+    source.next_check_at = result.next_check_at
 
     if result.followings is not None:
         followed = {artist.key for artist in result.followings}

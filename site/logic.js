@@ -38,6 +38,50 @@ export function localDay(instant, timeZone) {
   return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
+/** Décalage d'un fuseau à un instant donné (heure affichée − heure UTC), en millisecondes. */
+function zoneOffset(ms, timeZone) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+      .formatToParts(ms)
+      .map((part) => [part.type, Number(part.value)]),
+  );
+  const shown = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  return shown - Math.floor(ms / 1000) * 1000;
+}
+
+/** Instant (ms UTC) d'une heure locale « HH:MM », un jour donné, dans un fuseau (heure d'été comprise). */
+export function zonedInstant(day, time, timeZone) {
+  const [year, month, date] = day.split("-").map(Number);
+  const [hours, minutes] = time.split(":").map(Number);
+  const naive = Date.UTC(year, month - 1, date, hours, minutes);
+  return naive - zoneOffset(naive - zoneOffset(naive, timeZone), timeZone);
+}
+
+/** Sources en retard, pour proposer un lancement manuel.
+ * - SoundCloud : aucun run depuis l'heure prévue du jour (marge comprise).
+ * - Spotify : le quota de 24 h est revenu (next_check_at passé) sans qu'aucun run ne l'utilise. */
+export function lateSources(data, now) {
+  if (!data.schedule) return [];
+  const planned = zonedInstant(localDay(now, data.timezone), data.schedule.time, data.timezone);
+  if (now.getTime() < planned + data.schedule.grace_minutes * 60_000) return [];
+  return Object.entries(data.sources ?? {})
+    .filter(([, source]) =>
+      source.next_check_at
+        ? Date.parse(source.next_check_at) <= now.getTime()
+        : !source.last_attempt_at || Date.parse(source.last_attempt_at) < planned,
+    )
+    .map(([platform]) => platform);
+}
+
 /** Vendredi qui ouvre la semaine de sortie contenant ce jour : les sorties tombent le vendredi. */
 export function releaseWeek(day) {
   const ms = dayToUtc(day);

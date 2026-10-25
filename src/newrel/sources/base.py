@@ -25,6 +25,8 @@ class SourceContext:
     """Artistes déjà vérifiés au moins une fois (absents : premier passage, donc baseline)."""
     previous_followings: tuple[FollowedArtist, ...] = ()
     quota_reset_at: datetime | None = None
+    catalog_used_at: datetime | None = None
+    """Dernier run qui a interrogé le catalogue (début de la fenêtre de quota en cours)."""
     accept_drop: bool = False
 
 
@@ -51,6 +53,10 @@ class SourceResult:
     pending: int = 0
     """Artistes laissés pour un prochain run (budget d'appels atteint)."""
     quota_reset_at: datetime | None = None
+    catalog_used_at: datetime | None = None
+    """Renseigné quand ce run a interrogé le catalogue : la fenêtre de quota repart d'ici."""
+    next_check_at: datetime | None = None
+    """Moment où la source pourra de nouveau interroger son catalogue (None : à chaque run)."""
     warnings: list[str] = field(default_factory=list)
     calls: int = 0
 

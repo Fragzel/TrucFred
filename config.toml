@@ -10,6 +10,8 @@ stale_hours = 36             # bannière sur la page si les données ont plus de
 followings_drop_ratio = 0.3  # chute d'abonnements au-delà de laquelle la liste reçue est ignorée
 token_warn_days = 150        # avertissement : le refresh token Spotify expire à 6 mois
 token_error_days = 170       # run rouge peu avant l'expiration
+schedule_time = "06:17"      # heure du cron de .github/workflows/update.yml (garder les deux identiques)
+schedule_grace_minutes = 45  # au-delà, la page propose de lancer la mise à jour à la main
 
 [spotify]
 market = "FR"
@@ -21,6 +23,7 @@ max_retry_after_seconds = 120
 # Quota Development Mode mesuré le 22/10/2026 : ~100 appels catalogue par 24 h, partagés par toutes
 # les apps du compte développeur (et par « newrel fetch » en local). On en garde 10 de marge.
 daily_catalog_calls = 90
+quota_window_hours = 24     # un seul passage catalogue par fenêtre : un run plus tôt ne touche pas à Spotify
 active_within_days = 365    # artiste « actif » : une sortie dans l'année
 active_interval_days = 2    # vérifié environ tous les 2 jours…
 dormant_interval_days = 7   # … contre tous les 7 jours pour un artiste en sommeil

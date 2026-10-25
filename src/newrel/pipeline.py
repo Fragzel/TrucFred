@@ -135,7 +135,12 @@ def run(
     state_written = not offline and bool(configured)
     generated_at = now if state_written else _last_update(state, now)
     data = releases_file.build(
-        state, config, generated_at=generated_at, now=now, artist_aliases=aliases
+        state,
+        config,
+        generated_at=generated_at,
+        now=now,
+        artist_aliases=aliases,
+        repository=env.get("GITHUB_REPOSITORY"),
     )
     payload = data.model_dump_json(indent=2) + "\n"
     if state_written:

@@ -15,6 +15,7 @@ from newrel.models import (
     Release,
     ReleasesFile,
     Rules,
+    Schedule,
     SourceState,
     SourceSummary,
     State,
@@ -31,6 +32,7 @@ def build(
     generated_at: datetime,
     now: datetime,
     artist_aliases: Aliases | None = None,
+    repository: str | None = None,
 ) -> ReleasesFile:
     tz = ZoneInfo(config.timezone)
     cutoff = now.astimezone(tz).date() - timedelta(days=config.window_days)
@@ -65,6 +67,8 @@ def build(
             new_max_age_days=config.new_max_age_days,
             stale_hours=config.stale_hours,
         ),
+        schedule=Schedule(time=config.schedule_time, grace_minutes=config.schedule_grace_minutes),
+        repository=repository,
         sources={name: _summary(source, state) for name, source in sorted(state.sources.items())},
         aliases=dict(sorted(aliases.items())),
         releases=releases,
@@ -96,6 +100,8 @@ def _summary(source: SourceState, state: State) -> SourceSummary:
         checked_last_run=source.checked_last_run,
         oldest_check_at=min(checks, default=None),
         quota_reset_at=source.quota_reset_at,
+        last_attempt_at=source.last_attempt_at,
+        next_check_at=source.next_check_at,
     )
 
 

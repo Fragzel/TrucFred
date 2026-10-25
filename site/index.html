@@ -18,6 +18,10 @@
       </div>
       <p id="rotation" class="meta rotation" hidden></p>
       <div id="notices" role="status"></div>
+      <div id="late" class="notice notice-warning late" hidden>
+        <span id="late-text"></span>
+        <button id="run-now" type="button" class="run-now">Lancer la mise à jour</button>
+      </div>
       <nav class="tabs" role="tablist" aria-label="Classement des sorties">
         <button class="tab" type="button" role="tab" data-tab="todo" aria-controls="list">À découvrir</button>
         <button class="tab" type="button" role="tab" data-tab="seen" aria-controls="list">Déjà vus</button>
@@ -44,6 +48,10 @@
         <button id="export" type="button" class="reset">Exporter</button>
         <label class="reset import">Importer<input id="import" type="file" accept="application/json,.json"></label>
       </p>
+      <p id="token-tools" class="marks-tools" hidden>
+        Un token GitHub est enregistré dans ce navigateur pour lancer la mise à jour.
+        <button id="forget-token" type="button" class="reset">Oublier le token</button>
+      </p>
       <details id="hidden-box" class="hidden-box" hidden>
         <summary id="hidden-summary"></summary>
         <ul id="hidden-list"></ul>
@@ -56,6 +64,32 @@
     </footer>
 
     <div id="toast" class="toast" role="status" hidden></div>
+
+    <dialog id="run-dialog" class="run-dialog" aria-labelledby="run-title">
+      <form id="run-form" method="dialog">
+        <h2 id="run-title">Lancer la mise à jour</h2>
+        <p id="run-error" class="run-error" hidden></p>
+        <ol>
+          <li>
+            <a id="run-github" target="_blank" rel="noopener">Ouvrir la mise à jour sur GitHub</a>,
+            puis « Run workflow » (il faut être connecté à GitHub).
+          </li>
+          <li>
+            Ou, pour lancer depuis cette page, <a id="run-token-link" target="_blank" rel="noopener">créer un token GitHub</a> :
+            dans « Repository access », choisir « Only select repositories » puis ce dépôt ;
+            la permission « Actions : Read and write » est déjà cochée, n'en ajoute pas d'autre.
+            Colle-le ci-dessous : il ne quitte pas ce navigateur.
+          </li>
+        </ol>
+        <label class="run-token">Token GitHub
+          <input id="run-token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…">
+        </label>
+        <p class="run-buttons">
+          <button type="submit" value="close" class="reset">Fermer</button>
+          <button type="submit" value="save" class="run-now">Enregistrer et lancer</button>
+        </p>
+      </form>
+    </dialog>
 
     <template id="tpl-week">
       <section class="week">

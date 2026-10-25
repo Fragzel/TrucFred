@@ -29,6 +29,7 @@ class SpotifyConfig:
     # Development Mode : environ 100 appels catalogue par 24 h, partagés entre toutes les apps
     # du compte développeur (mesuré le 22/10/2026, non documenté).
     daily_catalog_calls: int = 90
+    quota_window_hours: float = 24.0
     active_within_days: int = 365
     active_interval_days: float = 2.0
     dormant_interval_days: float = 7.0
@@ -68,6 +69,9 @@ class Config:
     followings_drop_ratio: float = 0.3
     token_warn_days: int = 150
     token_error_days: int = 170
+    schedule_time: str = "06:17"
+    """Heure du cron dans .github/workflows/update.yml (à garder identiques)."""
+    schedule_grace_minutes: int = 45
     spotify: SpotifyConfig = field(default_factory=SpotifyConfig)
     soundcloud: SoundCloudConfig = field(default_factory=SoundCloudConfig)
     notify: NotifyConfig = field(default_factory=NotifyConfig)
@@ -124,6 +128,11 @@ def load_config(path: Path) -> Config:
         ZoneInfo(config.timezone)
     except (ZoneInfoNotFoundError, ValueError) as exc:
         raise ConfigError(f"[general] fuseau horaire inconnu : {config.timezone}") from exc
+    hours, _, minutes = config.schedule_time.partition(":")
+    if not (hours.isdigit() and minutes.isdigit() and int(hours) < 24 and int(minutes) < 60):
+        raise ConfigError(
+            f"[general] schedule_time attendu au format HH:MM : {config.schedule_time}"
+        )
     return config
 
 

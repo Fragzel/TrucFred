@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
 
@@ -18,8 +19,8 @@ DAY = timedelta(days=1)
 def run(tmp_path: Path, now=NOW, **options):
     options.setdefault("env", ENV)
     options.setdefault("sources", SOURCES)
+    options.setdefault("config", CONFIG)
     return pipeline.run(
-        config=CONFIG,
         state_dir=tmp_path / "data",
         out_dir=tmp_path / "_site",
         site_dir=SITE_DIR,
@@ -70,7 +71,40 @@ def test_premier_run_catalogue_en_historique_sauf_sorties_recentes(tmp_path, one
         "checked_last_run": 1,
         "oldest_check_at": "2026-10-22T04:17:00Z",
         "quota_reset_at": None,
+        "last_attempt_at": "2026-10-22T04:17:00Z",
+        "next_check_at": None,  # fenêtre de quota désactivée dans la configuration de test
     }
+
+
+def test_un_seul_passage_spotify_par_fenetre_de_24_h(tmp_path, one_artist) -> None:
+    config = replace(CONFIG, spotify=replace(CONFIG.spotify, quota_window_hours=24))
+    run(tmp_path, config=config)
+    summary = published(tmp_path)["sources"]["spotify"]
+    assert summary["next_check_at"] == "2026-10-23T04:27:00Z"  # 24 h + 10 min de marge
+    calls = one_artist.catalog_calls
+    # Run manuel ou cron en avance le lendemain matin : le quota n'est pas encore revenu.
+    run(tmp_path, now=NOW + timedelta(hours=20), config=config)
+    assert one_artist.catalog_calls == calls
+    summary = published(tmp_path)["sources"]["spotify"]
+    assert summary["status"] == "ok"
+    assert "prochaine vérification possible le 23/10 à 06:27" in summary["message"]
+    assert summary["next_check_at"] == "2026-10-23T04:27:00Z"
+    run(tmp_path, now=NOW + timedelta(hours=25), config=config)  # fenêtre rouverte
+    assert one_artist.catalog_calls > calls
+    assert published(tmp_path)["sources"]["spotify"]["next_check_at"] == "2026-10-24T05:27:00Z"
+
+
+def test_fenetre_deduite_d_un_etat_ancien(tmp_path, one_artist) -> None:
+    """État d'avant le 25/10 : sans catalog_used_at, le dernier run qui a vérifié compte."""
+    run(tmp_path)
+    path = tmp_path / "data" / "state.json"
+    state = json.loads(path.read_text(encoding="utf-8"))
+    del state["sources"]["spotify"]["catalog_used_at"]
+    path.write_text(json.dumps(state), encoding="utf-8")
+    config = replace(CONFIG, spotify=replace(CONFIG.spotify, quota_window_hours=24))
+    calls = one_artist.catalog_calls
+    run(tmp_path, now=NOW + timedelta(hours=3), config=config)
+    assert one_artist.catalog_calls == calls
 
 
 def test_quota_epuise_memorise_d_un_run_a_l_autre(tmp_path, one_artist) -> None:

@@ -489,6 +489,7 @@ Il reste à créer l'app (Artist Pro), lancer cette commande, puis valider sur t
 | 3e | Masquer un compte depuis la page (**fait le 22/10**, ajouté à ta demande) | `site/app.js`, `site/logic.js` | un label masqué disparaît de « À découvrir » et « Déjà vus », pas des favoris ; il se réaffiche depuis la liste en bas de page |
 | 3c | « Déjà vu » et favoris (**fait le 22/10**, avancé à ta demande) | `site/app.js`, `site/logic.js`, `site/index.html` | onglets « À découvrir », « Déjà vus » et « Favoris » ; bouton « Déjà vu » et étoile sur chaque carte ; marques en localStorage indexées par l'identifiant stable ; favoris gardés en copie au-delà de la fenêtre de 90 jours ; export et import en JSON ; les marques survivent à une fusion grâce aux alias |
 | 3d | Page « Artistes » : les plateformes de chaque artiste et les candidats à la fusion | `site/artists.html` | on peut remplir `aliases.toml` sans lire les logs |
+| 3f | Bouton « Lancer la mise à jour » quand le cron est en retard (**fait le 25/10**, ajouté à ta demande), avec un seul passage Spotify par 24 h | `sources/spotify.py`, `site/app.js`, `site/logic.js`, `schedule_*` et `quota_window_hours` dans `config.toml` | le bouton n'apparaît qu'après 6 h 17 + 45 min sans run, ou quand le quota Spotify est revenu sans être utilisé ; un run lancé avant la fin des 24 h ne fait aucun appel catalogue ; avec un token *Actions* gardé dans le navigateur, un clic lance le workflow, et sans token, il mène à la page du workflow |
 
 ## 5. Structure du repo et dépendances
 

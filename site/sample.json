@@ -14,6 +14,12 @@
       "message": null,
       "last_success_at": "2026-10-22T04:21:07Z",
       "followed": 148
+    },
+    "youtube": {
+      "status": "ok",
+      "message": null,
+      "last_success_at": "2026-10-22T04:21:07Z",
+      "followed": 37
     }
   },
   "aliases": {},
@@ -33,7 +39,26 @@
       "tracks": 1,
       "cover": null,
       "links": [
-        {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleLumieresFroides", "type": "single", "date": "2026-10-16", "precision": "day"}
+        {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleLumieresFroides", "type": "single", "date": "2026-10-16", "precision": "day"},
+        {"platform": "youtube", "url": "https://www.youtube.com/watch?v=sampleLumieres", "type": "video", "date": "2026-10-15", "precision": "day"}
+      ]
+    },
+    {
+      "id": "r_5a1e0c0008",
+      "title": "Marée basse",
+      "edition": null,
+      "type": "video",
+      "type_inferred": false,
+      "artists": [{"id": "a_5a1e0c0a02", "name": "Les Marées Hautes"}],
+      "date": "2026-10-15",
+      "precision": "day",
+      "sort_date": "2026-10-15",
+      "first_seen": "2026-10-16T04:19:44Z",
+      "backfill": false,
+      "tracks": null,
+      "cover": null,
+      "links": [
+        {"platform": "youtube", "url": "https://www.youtube.com/watch?v=sampleMareeBasse", "type": "video", "date": "2026-10-15", "precision": "day"}
       ]
     },
     {

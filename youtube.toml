@@ -1,0 +1,19 @@
+# Tri des abonnements YouTube, tenu à jour par « uv run newrel triage youtube ».
+# Tu peux aussi le modifier à la main. Une chaîne absente d'ici est triée automatiquement à
+# chaque run (voir le README). Chaque entrée est l'identifiant de la chaîne (UC…) ou son
+# handle (@…) ; le commentaire rappelle son nom.
+#
+# Ce fichier est public, comme le reste du dépôt.
+
+# Chaînes à suivre (artistes, labels…), même si le tri automatique hésite.
+artists = [
+    "UCmj45Z6ZhLzkDlBbAvlV81w",  # cardiacmusic
+    "UCn-R1gBlR3hu8-bzF7Y2dLg",  # Génération Guignols
+    "UC5VqqAix-_zs9v8R-w15n6w",  # HKV official channel
+    "UC4eYXhJI4-7wSWc8UNRwD4A",  # NPR Music
+    "UCHPY6JX3EBMo1N9SKIxNDmQ",  # Swiftstyle
+]
+
+# Chaînes à ne jamais suivre, même si le tri automatique les retient.
+ignore = [
+]

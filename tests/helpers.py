@@ -2,9 +2,9 @@
 
 from datetime import UTC, date, datetime, timedelta
 
-from newrel.config import Config, SoundCloudConfig, SpotifyConfig
+from newrel.config import Config, SoundCloudConfig, SpotifyConfig, YouTubeConfig
 from newrel.http import HttpClient
-from newrel.sources import soundcloud, spotify
+from newrel.sources import soundcloud, spotify, youtube
 from newrel.sources.base import SourceContext, SourceResult, SourceSpec
 
 NOW = datetime(2026, 10, 22, 4, 17, tzinfo=UTC)  # un jeudi, run du matin
@@ -20,10 +20,15 @@ SC_ENV = {
     "SOUNDCLOUD_CLIENT_SECRET": "sc-client-secret",
     "SOUNDCLOUD_USER_URN": "soundcloud:users:1",
 }
+YT_ENV = {
+    "YOUTUBE_API_KEY": "yt-key",
+    "YOUTUBE_CHANNEL_ID": "UCami" + "0" * 19,  # la chaîne dont on lit les abonnements publics
+}
 CONFIG = Config(
     # Sans fenêtre de quota : les tests enchaînent des runs à 24 h d'intervalle tout pile.
     spotify=SpotifyConfig(requests_per_second=0, quota_window_hours=0),
     soundcloud=SoundCloudConfig(requests_per_second=0),
+    youtube=YouTubeConfig(requests_per_second=0),
 )
 
 
@@ -40,11 +45,16 @@ def collect_soundcloud_quickly(ctx: SourceContext) -> SourceResult:
     return soundcloud.collect(ctx, http=quick_http())
 
 
+def collect_youtube_quickly(ctx: SourceContext) -> SourceResult:
+    return youtube.collect(ctx, http=quick_http())
+
+
 SOURCES = {
     "spotify": SourceSpec(required_env=spotify.REQUIRED_ENV, collect=collect_quickly),
     "soundcloud": SourceSpec(
         required_env=soundcloud.REQUIRED_ENV, collect=collect_soundcloud_quickly
     ),
+    "youtube": SourceSpec(required_env=youtube.REQUIRED_ENV, collect=collect_youtube_quickly),
 }
 
 

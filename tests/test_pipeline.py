@@ -8,9 +8,10 @@ import pytest
 from newrel import pipeline
 from newrel.config import Aliases
 from newrel.sources.base import SourceResult, SourceSpec
-from tests.helpers import CONFIG, ENV, NOW, SC_ENV, SOURCES
+from tests.helpers import CONFIG, ENV, NOW, SC_ENV, SOURCES, YT_ENV
 from tests.soundcloud_fake import sc_playlist, sc_track, sc_user
 from tests.spotify_fake import album
+from tests.youtube_fake import yt_channel, yt_video
 
 SITE_DIR = Path(__file__).resolve().parents[1] / "site"
 DAY = timedelta(days=1)
@@ -331,3 +332,28 @@ def test_resultat_d_une_source_sans_artistes_verifies(tmp_path) -> None:
     outcome = run(tmp_path, sources=sources, env={})
     assert outcome.state_written
     assert published(tmp_path)["sources"]["spotify"]["status"] == "ok"
+
+
+def test_clip_youtube_rejoint_le_single_spotify(tmp_path, fake_spotify, fake_youtube) -> None:
+    fake_spotify.follow(("A1", "Nora Velasco"))
+    single = album("s1", "Lumières froides", "2026-10-16", artists=(("A1", "Nora Velasco"),))
+    fake_spotify.publish("A1", "single", single)
+    vevo = yt_channel(1, "NoraVelascoVEVO", topics=("Music",))
+    fake_youtube.subscribe(vevo, yt_channel(2, "Jeux et Astuces", topics=("Video_game_culture",)))
+    fake_youtube.upload(
+        vevo,
+        yt_video("c1", "Nora Velasco - Lumières froides (Clip officiel)", "2026-10-15T16:00:00Z"),
+        yt_video("c2", "Nora Velasco - Inédit (Official Video)", "2026-10-20T16:00:00Z"),
+    )
+    run(tmp_path, env=ENV | YT_ENV)
+    releases = by_title(tmp_path)
+    assert set(releases) == {"Lumières froides", "Inédit"}
+    merged = releases["Lumières froides"]
+    assert [link["platform"] for link in merged["links"]] == ["spotify", "youtube"]
+    assert (merged["type"], merged["date"]) == ("single", "2026-10-16")  # Spotify d'abord
+    assert len(merged["artists"]) == 1
+    assert releases["Inédit"]["type"] == "video"
+    assert releases["Inédit"]["artists"][0]["name"] == "NoraVelascoVEVO"
+    assert published(tmp_path)["sources"]["youtube"]["followed"] == 1
+    state = (tmp_path / "data" / "state.json").read_text(encoding="utf-8")
+    assert "Jeux et Astuces" not in state  # une chaîne écartée n'est jamais enregistrée

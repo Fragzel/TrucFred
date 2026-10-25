@@ -8,8 +8,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-Platform = Literal["spotify", "soundcloud"]
-ReleaseType = Literal["album", "ep", "single", "track"]
+Platform = Literal["spotify", "soundcloud", "youtube"]
+ReleaseType = Literal["album", "ep", "single", "track", "video"]
 Precision = Literal["year", "month", "day"]
 Status = Literal["ok", "partial", "error", "auth_expired"]
 

@@ -29,7 +29,8 @@
         "platform": {
           "enum": [
             "spotify",
-            "soundcloud"
+            "soundcloud",
+            "youtube"
           ],
           "title": "Platform",
           "type": "string"
@@ -48,7 +49,8 @@
         "platform": {
           "enum": [
             "spotify",
-            "soundcloud"
+            "soundcloud",
+            "youtube"
           ],
           "title": "Platform",
           "type": "string"
@@ -62,7 +64,8 @@
             "album",
             "ep",
             "single",
-            "track"
+            "track",
+            "video"
           ],
           "title": "Type",
           "type": "string"
@@ -119,7 +122,8 @@
             "album",
             "ep",
             "single",
-            "track"
+            "track",
+            "video"
           ],
           "title": "Type",
           "type": "string"

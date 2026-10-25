@@ -8,6 +8,7 @@
   --new: #d6336c;
   --spotify: #1db954;
   --soundcloud: #ff5500;
+  --youtube: #ff0033;
   --info: #e7f0ff;
   --warning: #fff4d6;
   --error: #ffe3e3;
@@ -568,6 +569,10 @@ h1 {
 
 .platform-soundcloud {
   color: var(--soundcloud);
+}
+
+.platform-youtube {
+  color: var(--youtube);
 }
 
 .foot {

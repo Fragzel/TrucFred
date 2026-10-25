@@ -28,6 +28,15 @@ def _common(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _youtube_triage(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--youtube-triage",
+        type=Path,
+        default=Path("youtube.toml"),
+        help="tri des abonnements YouTube (tenu par « newrel triage youtube »)",
+    )
+
+
 def _site_paths(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--out", type=Path, default=Path("_site"))
     parser.add_argument("--site", type=Path, default=Path("site"))
@@ -52,10 +61,12 @@ def _parser() -> argparse.ArgumentParser:
         help="accepte une forte baisse du nombre d'abonnements",
     )
     run.add_argument("--aliases", type=Path, default=Path("aliases.toml"))
+    _youtube_triage(run)
 
     fetch = commands.add_parser("fetch", help="interroge une source à blanc, sans rien écrire")
     fetch.add_argument("source", choices=sorted(SOURCES))
     _common(fetch)
+    _youtube_triage(fetch)
     fetch.add_argument(
         "--budget",
         type=int,
@@ -66,15 +77,27 @@ def _parser() -> argparse.ArgumentParser:
     auth = commands.add_parser(
         "auth", help="mise en route d'une source (Spotify : à refaire tous les ~6 mois)"
     )
-    auth.add_argument("source", choices=["spotify", "soundcloud", "ntfy"])
+    auth.add_argument("source", choices=["spotify", "soundcloud", "youtube", "ntfy"])
     auth.add_argument("--port", type=int, default=8888, help="Spotify : port du retour OAuth")
-    auth.add_argument("--profile", help="SoundCloud : adresse de ton profil soundcloud.com")
+    auth.add_argument(
+        "--profile", help="SoundCloud, YouTube : adresse du profil ou de la chaîne à suivre"
+    )
     auth.add_argument("--topic", help="ntfy : réutiliser un sujet existant plutôt qu'en tirer un")
     auth.add_argument("--config", type=Path, default=Path("config.toml"))
     auth.add_argument("--no-gh", action="store_true", help="n'enregistre pas les secrets avec gh")
     auth.add_argument("--repo", help="dépôt GitHub cible (par défaut : celui du dossier courant)")
     auth.add_argument(
         "--write-env", action="store_true", help="écrit aussi les valeurs dans .env.local"
+    )
+
+    triage = commands.add_parser(
+        "triage", help="trie tes abonnements YouTube : artistes à suivre, chaînes à écarter"
+    )
+    triage.add_argument("source", choices=["youtube"])
+    _common(triage)
+    _youtube_triage(triage)
+    triage.add_argument(
+        "--all", action="store_true", help="revoit toutes les chaînes, pas seulement les douteuses"
     )
 
     serve = commands.add_parser("serve", help="sert le site en local (données de data/ ou exemple)")
@@ -132,7 +155,7 @@ def _summary(outcome: pipeline.RunOutcome) -> str:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     outcome = pipeline.run(
-        config=load_config(args.config),
+        config=load_config(args.config, youtube_triage=args.youtube_triage),
         state_dir=args.state_dir,
         out_dir=args.out,
         site_dir=args.site,
@@ -162,7 +185,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 
 def _cmd_fetch(args: argparse.Namespace) -> int:
-    config = load_config(args.config)
+    config = load_config(args.config, youtube_triage=args.youtube_triage)
     config = replace(config, spotify=replace(config.spotify, daily_catalog_calls=args.budget))
     print(f"Budget : {args.budget} appels catalogue, pris sur le quota quotidien du workflow.")
     spec = SOURCES[args.source]
@@ -215,9 +238,27 @@ def _cmd_auth(args: argparse.Namespace) -> int:
         from newrel.sources.soundcloud_auth import setup
 
         return setup(profile=args.profile, use_gh=not args.no_gh, repo=args.repo, env_file=env_file)
+    if args.source == "youtube":
+        from newrel.sources.youtube_auth import setup as setup_youtube
+
+        return setup_youtube(
+            profile=args.profile, use_gh=not args.no_gh, repo=args.repo, env_file=env_file
+        )
     from newrel.sources.spotify_auth import authorize
 
     return authorize(port=args.port, use_gh=not args.no_gh, repo=args.repo, env_file=env_file)
+
+
+def _cmd_triage(args: argparse.Namespace) -> int:
+    from newrel.sources import youtube_triage
+
+    return youtube_triage.run(
+        config=load_config(args.config, youtube_triage=args.youtube_triage),
+        triage_path=args.youtube_triage,
+        state=youtube_triage.published_state(args.state_dir),
+        env=os.environ,
+        review_all=args.all,
+    )
 
 
 def _cmd_serve(args: argparse.Namespace) -> int:
@@ -241,6 +282,7 @@ COMMANDS = {
     "run": _cmd_run,
     "fetch": _cmd_fetch,
     "auth": _cmd_auth,
+    "triage": _cmd_triage,
     "serve": _cmd_serve,
     "schema": _cmd_schema,
 }

@@ -60,6 +60,12 @@ def context_for(
         # État d'avant le 25/10 : le dernier run qui a vérifié des artistes a ouvert la fenêtre.
         catalog_used_at=source.catalog_used_at
         or (source.last_attempt_at if source.checked_last_run else None),
+        peer_names=frozenset(
+            artist.name
+            for name, other in state.sources.items()
+            if name != platform
+            for artist in other.followings
+        ),
         accept_drop=accept_drop,
     )
 

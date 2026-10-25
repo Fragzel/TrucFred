@@ -3,6 +3,7 @@ import respx
 
 from tests.soundcloud_fake import FakeSoundCloud
 from tests.spotify_fake import FakeSpotify
+from tests.youtube_fake import FakeYouTube
 
 
 @pytest.fixture
@@ -19,3 +20,8 @@ def fake_spotify(router):
 @pytest.fixture
 def fake_soundcloud(router):
     return FakeSoundCloud(router)
+
+
+@pytest.fixture
+def fake_youtube(router):
+    return FakeYouTube(router)

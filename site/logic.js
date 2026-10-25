@@ -1,8 +1,8 @@
 // Fonctions pures de la page : filtres, recherche, semaines, nouveautés, fraîcheur.
 // Aucune dépendance au DOM : testées avec `node --test tests/js/logic.test.js`.
 
-export const TYPE_LABELS = { album: "Album", ep: "EP", single: "Single", track: "Son" };
-export const PLATFORM_LABELS = { spotify: "Spotify", soundcloud: "SoundCloud" };
+export const TYPE_LABELS = { album: "Album", ep: "EP", single: "Single", track: "Son", video: "Vidéo" };
+export const PLATFORM_LABELS = { spotify: "Spotify", soundcloud: "SoundCloud", youtube: "YouTube" };
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;

@@ -11,7 +11,7 @@ from newrel.config import Config
 from newrel.models import State
 
 Level = Literal["ok", "warning", "error"]
-LABELS = {"spotify": "Spotify", "soundcloud": "SoundCloud"}
+LABELS = {"spotify": "Spotify", "soundcloud": "SoundCloud", "youtube": "YouTube"}
 _RANK: dict[Level, int] = {"ok": 0, "warning": 1, "error": 2}
 
 

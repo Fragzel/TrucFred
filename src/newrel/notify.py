@@ -17,7 +17,7 @@ from newrel.config import NotifyConfig
 from newrel.http import HttpClient, HttpError, ensure_ok, mask
 from newrel.models import Release, ReleasesFile
 
-TYPE_LABELS = {"album": "album", "ep": "EP", "single": "single", "track": "son"}
+TYPE_LABELS = {"album": "album", "ep": "EP", "single": "single", "track": "son", "video": "vidéo"}
 
 
 def fresh_releases(data: ReleasesFile, now: datetime, config: NotifyConfig) -> list[Release]:

@@ -27,6 +27,8 @@ class SourceContext:
     quota_reset_at: datetime | None = None
     catalog_used_at: datetime | None = None
     """Dernier run qui a interrogé le catalogue (début de la fenêtre de quota en cours)."""
+    peer_names: frozenset[str] = frozenset()
+    """Noms des artistes suivis sur les autres plateformes (indice pour le tri YouTube)."""
     accept_drop: bool = False
 
 

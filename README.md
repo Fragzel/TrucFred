@@ -1,9 +1,9 @@
 # TrucFred : nouvelles sorties des artistes suivis
 
-Une page web qui liste les nouvelles sorties (albums, EP, singles, nouveaux sons) des artistes
-que je suis sur Spotify et SoundCloud, triées par semaine de sortie, avec un lien vers chaque
-plateforme. Une sortie présente sur les deux plateformes n'occupe qu'une carte. Voir le
-[plan](docs/PLAN.md).
+Une page web qui liste les nouvelles sorties (albums, EP, singles, nouveaux sons, clips) des
+artistes que je suis sur Spotify, SoundCloud et YouTube, triées par semaine de sortie, avec un lien
+vers chaque plateforme. Une sortie présente sur plusieurs plateformes n'occupe qu'une carte. Voir
+le [plan](docs/PLAN.md).
 
 - **Collecte** : un workflow GitHub Actions planifié (tous les jours vers 6 h 17, heure de Paris)
   lance `newrel`, un script Python.
@@ -37,10 +37,27 @@ plateforme. Une sortie présente sur les deux plateformes n'occupe qu'une carte.
      n'y a aucune autorisation à donner, car tes abonnements SoundCloud sont publics.
    - Il enregistre ensuite les secrets `SOUNDCLOUD_CLIENT_ID` et `SOUNDCLOUD_CLIENT_SECRET`,
      ainsi que la variable `SOUNDCLOUD_USER_URN`. L'option `--write-env` marche aussi.
-6. **Premier run** : `gh workflow run update.yml`, ou attendre le passage du lendemain matin.
-   - Une plateforme qui n'a encore jamais été lue démarre à zéro : tout ce qu'elle trouve est
-     classé comme historique (pas de badge « Nouveau »).
-   - Les vraies nouveautés apparaissent à partir du run suivant.
+6. **Clé API YouTube** : sur la [console Google Cloud](https://console.cloud.google.com/), crée
+   un projet, puis :
+   - dans *API et services > Bibliothèque*, active **YouTube Data API v3** ;
+   - dans *API et services > Identifiants*, crée une **clé API**, puis restreins-la à « YouTube
+     Data API v3 » (*Restrictions relatives aux API*).
+   - Aucune autorisation OAuth, aucun écran de consentement et rien à publier : une clé API
+     n'expire pas.
+7. **Abonnements publics** : sur le compte YouTube dont on suit les abonnements, *Paramètres >
+   Confidentialité*, décoche « Garder tous mes abonnements privés ». C'est ce qui permet de les
+   lire avec une simple clé.
+8. **Mise en route YouTube** : `uv run newrel auth youtube --write-env`.
+   - Le script demande la clé API et la chaîne (adresse `https://www.youtube.com/@…`, `@handle`
+     ou identifiant `UC…`), puis vérifie que ses abonnements sont lisibles.
+   - Il enregistre le secret `YOUTUBE_API_KEY` et la variable `YOUTUBE_CHANNEL_ID`.
+     `--write-env` les écrit aussi dans `.env.local`, dont la commande de tri a besoin.
+9. **Tri des abonnements** : `uv run newrel triage youtube`, puis commite `youtube.toml` (voir
+   [Tri des abonnements YouTube](#tri-des-abonnements-youtube)).
+10. **Premier run** : `gh workflow run update.yml`, ou attendre le passage du lendemain matin.
+    - Le premier passage sur un artiste range dans l'historique ce qui a plus de 14 jours (pas de
+      badge « Nouveau ») ; une sortie plus récente garde son badge.
+    - Les vraies nouveautés apparaissent à partir du run suivant.
 
 ## Commandes
 
@@ -50,8 +67,11 @@ plateforme. Une sortie présente sur les deux plateformes n'occupe qu'une carte.
 | `uv run newrel run` | Run complet en local : état dans `data/`, site dans `_site/` |
 | `uv run newrel serve` | Sert le site sur <http://127.0.0.1:8000>, avec les données de `data/` ou, à défaut, `site/sample.json` |
 | `uv run newrel fetch soundcloud` | Interroge SoundCloud à blanc, sans rien écrire |
+| `uv run newrel fetch youtube` | Trie tes abonnements YouTube et liste les clips trouvés, sans rien écrire |
+| `uv run newrel triage youtube` | Trie tes abonnements YouTube et te demande ton avis sur les chaînes douteuses (`--all` : sur toutes) |
 | `uv run newrel auth spotify` | Ré-autorise Spotify (voir le runbook) |
 | `uv run newrel auth soundcloud` | Vérifie l'accès SoundCloud et enregistre secrets et URN |
+| `uv run newrel auth youtube` | Vérifie la clé API et la chaîne YouTube (abonnements publics), puis enregistre clé et chaîne |
 | `uv run newrel auth ntfy` | Active les notifications sur ton téléphone (voir plus bas) |
 | `uv run newrel schema` | Régénère `schema/releases.schema.json` après une modification de `models.py` |
 
@@ -70,6 +90,44 @@ Pour travailler en local sur les vraies données :
 git fetch origin data
 git worktree add data origin/data
 ```
+
+## Tri des abonnements YouTube
+
+Tes abonnements YouTube mélangent artistes, labels et chaînes sans rapport avec la musique.
+Chaque run les trie, et seules les chaînes musicales sont suivies : artistes, labels et chaînes
+de promo.
+
+- **Ordre du tri**, pour chaque abonnement :
+  1. `youtube.toml` tranche d'abord : `artists` (à suivre) et `ignore` (à écarter) ;
+  2. une chaîne déjà suivie le reste, pour éviter les va-et-vient d'un jour à l'autre ;
+  3. des indices gratuits : chaîne « - Topic » ou VEVO, même nom qu'un artiste suivi sur Spotify
+     ou SoundCloud (suivie), sujets YouTube sans rapport avec la musique (écartée) ;
+  4. sinon, un examen des 20 dernières vidéos : part de la catégorie Musique, nombre d'artistes
+     différents en tête des titres (« Autre artiste - Titre » : label ou chaîne de promo ; les
+     reprises ne comptent pas), part de clips et d'audios, part de titres au nom de la chaîne
+     (un artiste qui n'utilise pas la catégorie Musique est reconnu ainsi).
+- **Labels et chaînes de promo** : une chaîne qui publie des titres de plusieurs artistes est
+  suivie comme un artiste, puisque leurs sorties comptent aussi. `uv run newrel triage youtube`
+  en affiche la liste à part, avec les @handles : une chaîne trop prolifique s'écarte dans
+  `ignore` de `youtube.toml`, ou se masque sur la page.
+  - Leurs vidéos gardent leur titre complet (« Artiste - Morceau ») et sont attribuées à la
+    chaîne : elles ne fusionnent pas avec la même sortie publiée sur Spotify par l'artiste.
+- **Chaînes douteuses** : elles ne sont pas suivies. Le run affiche « N chaîne(s) à trier » ;
+  `uv run newrel triage youtube` te les présente une par une (sujets, raison, derniers titres ;
+  `v` ouvre la chaîne). Tes réponses vont dans `youtube.toml`, qu'il faut commiter et pousser.
+- **Revoir le tri automatique** : `uv run newrel triage youtube --all` passe toutes les chaînes
+  en revue, avec la proposition automatique comme réponse par défaut.
+- **Ce qui est écrit dans `youtube.toml`** : seulement tes réponses utiles, une chaîne douteuse
+  tranchée ou un classement automatique corrigé. Une chaîne non musicale écartée d'office n'y
+  apparaît pas.
+- **Ce qui compte comme une sortie** : les clips et audios officiels, c'est-à-dire les vidéos de
+  1 à 20 minutes (`min_duration_seconds`, `max_duration_minutes`), en catégorie Musique, avec
+  une mention explicite (« Clip officiel », « Audio »…) ou titrées « Artiste - Morceau » au nom
+  de la chaîne. Les Shorts, lives, teasers, making-of, interviews et épisodes de web-séries sont
+  exclus.
+- **Sur la page** : un clip rejoint la carte du single Spotify ou SoundCloud du même titre. Sans
+  équivalent, il a sa propre carte, de type « Vidéo ».
+- **Coût** : environ 1 unité de quota par chaîne suivie et par run, sur 10 000 par jour.
 
 ## Déjà vu et favoris
 
@@ -120,16 +178,20 @@ la page.
 
 ## Doublons entre plateformes
 
-- **Une seule carte.** Une sortie présente à la fois sur Spotify et sur SoundCloud n'occupe qu'une
-  carte, avec un lien par plateforme. Il faut pour cela le même artiste, le même titre normalisé
-  et des dates proches de 7 jours au plus.
-- **Titres.** La normalisation retire un préfixe « Artiste - », ainsi que les mentions comme
-  `[Free DL]`, `(Clip officiel)` ou `(feat. …)`.
+- **Une seule carte.** Une sortie présente sur plusieurs plateformes n'occupe qu'une carte, avec
+  un lien par plateforme. Il faut pour cela le même artiste, le même titre normalisé et des dates
+  proches de 7 jours au plus. Le clip, l'audio et la lyric video d'un même titre sur YouTube se
+  regroupent aussi.
+- **Titres.** La normalisation retire un préfixe « Artiste - » (ou « Artiste ft. Invité - »),
+  ainsi que les mentions comme `[Free DL]`, `(Clip officiel)`, `(Official Music Video)`,
+  `| 4K` ou `(feat. …)`. Sur YouTube, le titre affiché est nettoyé de la même façon.
 - **Date affichée.** C'est celle de Spotify quand elle est précise au jour.
-- **Artistes.** Un même nom normalisé sur les deux plateformes désigne le même artiste :
-  « Nora Velasco Official » sur SoundCloud et « Nora Velasco » sur Spotify, par exemple.
+- **Artistes.** Un même nom normalisé sur plusieurs plateformes désigne le même artiste :
+  « Nora Velasco Official » sur SoundCloud, « NoraVelascoVEVO » sur YouTube et « Nora Velasco »
+  sur Spotify, par exemple.
   - Si un nom correspond à plusieurs comptes sur une même plateforme (homonymes), rien n'est
-    fusionné automatiquement.
+    fusionné automatiquement. Exception : sur YouTube, la chaîne d'un artiste et sa chaîne VEVO
+    ou « - Topic » sont un seul artiste.
   - `aliases.toml` permet de forcer une fusion (`[[same]]`) ou de l'interdire (`[[never]]`).
 - **Albums SoundCloud.** Les sons d'un album ou d'un EP SoundCloud sont couverts par la carte de
   l'album.
@@ -193,20 +255,30 @@ page affiche un bandeau avec un bouton « Lancer la mise à jour » :
 | Avertissement « quota épuisé jusqu'au … » | Le quota a été dépassé, par exemple après trop d'appels `fetch` en local. Rien à faire : la collecte reprend toute seule à l'heure indiquée. |
 | Spotify « en panne » une seule journée | Rien à faire : la page garde les données du dernier run réussi, et le run ne passe au rouge qu'au deuxième échec d'affilée. |
 | Modifier uniquement la page | Pousse les changements de `site/` : le site est reconstruit sans appeler les API. Pour le reconstruire à la main : `gh workflow run update.yml -f offline=true`. |
+| YouTube : « abonnements privés » | Les abonnements de la chaîne sont repassés en privé : décoche à nouveau « Garder tous mes abonnements privés » dans les paramètres YouTube. En attendant, les chaînes déjà suivies continuent d'être vérifiées. |
+| YouTube : « HTTP 400 (API_KEY_INVALID…) » | La clé API a été supprimée ou régénérée : crée-en une autre, puis `uv run newrel auth youtube --write-env`. |
+| Avertissement « YouTube : N chaîne(s) à trier » | `uv run newrel triage youtube`, puis commite et pousse `youtube.toml`. |
+| YouTube suit une chaîne qui n'est pas un artiste | `uv run newrel triage youtube --all`, ou ajoute son identifiant (`UC…`) ou son handle (`@…`) dans `ignore` de `youtube.toml`. |
+| Un artiste YouTube manque | Ajoute son identifiant ou son handle dans `artists` de `youtube.toml`. |
 | Repartir de zéro | `git push origin --delete data`, puis relance le workflow. |
 
 ## Confidentialité et conditions d'utilisation
 
 - Le dépôt est public : la liste des artistes suivis (`releases.json`, branche `data`) et les
   logs Actions sont lisibles par tous.
+- YouTube : les abonnements de la chaîne suivie sont publics sur YouTube, condition pour les
+  lire sans autorisation. Côté dépôt, seules les chaînes musicales suivies sont enregistrées
+  dans l'état, et les logs ne nomment jamais une chaîne écartée ou douteuse (seulement leur
+  nombre). `youtube.toml` est public lui aussi, avec le nom de chaque chaîne que tu y as rangée.
 - La page est en `noindex`, mais reste accessible à qui en connaît l'URL.
 - Aucun secret n'est versionné, et les tokens obtenus pendant un run sont masqués dans les logs.
 - Le token du bouton « Lancer la mise à jour » reste dans le navigateur. Son stockage est
   partagé avec tes autres sites `<toi>.github.io`. S'il fuitait, il ne permettrait que de lancer
   ou d'annuler des runs de ce dépôt, sans lire ni modifier ses fichiers ou ses secrets.
 - Usage strictement personnel :
-  - chaque sortie renvoie vers Spotify, avec son logo ;
+  - chaque sortie renvoie vers sa plateforme (Spotify, SoundCloud, YouTube), avec son logo ;
   - il n'y a aucun lecteur embarqué ;
-  - les pochettes sont chargées depuis le CDN de Spotify, jamais recopiées.
+  - les pochettes et vignettes sont chargées depuis le CDN de chaque plateforme, jamais
+    recopiées.
 - Les limites des conditions d'utilisation des plateformes sont détaillées au §3.5 du
   [plan](docs/PLAN.md).

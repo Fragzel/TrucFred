@@ -1,9 +1,12 @@
 """Regroupement des liens qui désignent une même sortie, sur une plateforme ou entre plateformes.
 
-- Artistes : un même nom normalisé sur Spotify et SoundCloud désigne le même artiste, sauf
-  homonymie (plusieurs comptes de même nom sur une plateforme) ; aliases.toml tranche à la main.
+- Artistes : un même nom normalisé sur Spotify, SoundCloud et YouTube désigne le même artiste,
+  sauf homonymie (plusieurs comptes de même nom sur une plateforme) ; aliases.toml tranche à la
+  main. Exception : sur YouTube, la chaîne principale et sa chaîne VEVO ou « - Topic » sont un
+  seul artiste.
 - Sorties : même artiste, même titre normalisé, même édition, dates à ±7 jours et types
-  compatibles. Sur une même plateforme, seuls les jumeaux explicit / clean fusionnent.
+  compatibles. Sur une même plateforme, seuls les jumeaux explicit / clean fusionnent, et sur
+  YouTube les vidéos d'un même titre (clip, audio, lyric video).
 """
 
 from __future__ import annotations
@@ -21,15 +24,22 @@ from newrel.config import Aliases
 from newrel.models import LinkState
 
 TOLERANCE = timedelta(days=7)
-SHORT_TYPES = frozenset({"single", "ep", "track"})
-PLATFORM_ORDER = ("spotify", "soundcloud")
+SHORT_TYPES = frozenset({"single", "ep", "track", "video"})
+PLATFORM_ORDER = ("spotify", "soundcloud", "youtube")
+SAME_NAME_PLATFORMS = frozenset({"youtube"})
+"""Plateformes où deux comptes suivis de même nom sont le même artiste (chaîne + VEVO)."""
 _BRACKETS = re.compile(r"\s*[\(\[]([^\)\]]*)[\)\]]")
 _DASH_PREFIX = re.compile(r"^\s*(.+?)\s+[-–—]\s+(.+)$")
 _DASH_SUFFIX = re.compile(r"\s+[-–—]\s+([^-–—]+)$")
+_PIPE_SUFFIX = re.compile(r"\s*\|\s*([^|]*)$")
 _CREDIT = re.compile(r"^(feat|ft|featuring|with|prod|produced by)\b")
+_CREDIT_SPLIT = re.compile(r"\s*(?:,|&|\+|\b(?:feat|ft|featuring|x|et|and|with|avec|vs)\b\.?)\s*")
+# « Clip officiel », « Official 4K Music Video », « Vidéo officielle », « Lyrics », « MV »…
+_NOISE_WORD = r"(official|officiel|officielle|music|musical|hd|hq|uhd|4k|8k|lyrics?|paroles)"
 _NOISE = re.compile(
-    r"^(free\s*(dl|download)|out now|premiere|clip officiel|audio officiel|lyrics?( video)?"
-    r"|visuali[sz]er|official (audio|video|music video|lyric video|visuali[sz]er))$"
+    r"^(free\s*(dl|download)|out now|premiere|official|officiel|officielle|hd|hq|uhd|4k|8k"
+    rf"|({_NOISE_WORD}\s+)*(video|clip|audio|lyrics?|paroles|visuali[sz]er|mv|m/v)"
+    rf"(\s+{_NOISE_WORD})*)$"
 )
 _EDITION = re.compile(
     r"\b(deluxe|remaster\w*|anniversary|live|remix\w*|sped up|slowed|instrumental\w*"
@@ -76,16 +86,61 @@ def artist_name_key(name: str) -> str:
     return key
 
 
+def split_prefix(title: str) -> tuple[list[str], str] | None:
+    """« Artiste ft. Invité - Titre » → (["Artiste ft. Invité", "artiste", "invite"], "Titre").
+
+    Le préfixe entier vient en tête, puis chaque nom crédité. None sans préfixe, ou quand la
+    partie après le tiret n'est qu'une mention (« Titre - Clip officiel »).
+    """
+    if not (prefix := _DASH_PREFIX.match(title)):
+        return None
+    rest = fold(prefix.group(2)).strip()
+    if rest in {"single", "ep"} or _NOISE.match(rest):
+        return None
+    whole = prefix.group(1).strip()
+    credited = [part for part in _CREDIT_SPLIT.split(fold(whole)) if part.strip()]
+    return [whole, *credited], prefix.group(2)
+
+
+def _without_artist_prefix(title: str, artist_names: Iterable[str]) -> str:
+    """Retire le préfixe « Artiste - » (SoundCloud, YouTube) quand il nomme un des artistes,
+    seul ou parmi d'autres (« Artiste ft. Invité - Titre »)."""
+    names = {artist_name_key(name) for name in artist_names} - {""}
+    if (parts := split_prefix(title)) and any(artist_name_key(n) in names for n in parts[0]):
+        return parts[1]
+    return title
+
+
+def _without_noise_suffixes(text: str) -> str:
+    """Retire les mentions finales « | Clip officiel » des titres YouTube."""
+    while (suffix := _PIPE_SUFFIX.search(text)) and (
+        not suffix.group(1).strip() or _NOISE.match(fold(suffix.group(1)).strip())
+    ):
+        text = text[: suffix.start()]
+    return text
+
+
+def clean_title(title: str, artist_names: Iterable[str] = ()) -> str:
+    """Titre affichable d'une vidéo : « Nora - Nuit (Clip officiel) | 4K » → « Nuit »."""
+    text = _without_noise_suffixes(_without_artist_prefix(title, artist_names))
+
+    def keep(match: re.Match[str]) -> str:
+        return "" if _NOISE.match(fold(match.group(1)).strip()) else match.group(0)
+
+    text = re.sub(r"\s+", " ", _BRACKETS.sub(keep, text)).strip()
+    if (suffix := _DASH_SUFFIX.search(text)) and _NOISE.match(fold(suffix.group(1)).strip()):
+        text = text[: suffix.start()].strip()
+    return text or title.strip()
+
+
 def split_title(title: str, artist_names: Iterable[str] = ()) -> tuple[str, str | None]:
     """Clé de titre et édition : « Album (Deluxe Edition) » → ("album", "Deluxe Edition").
 
-    Le préfixe « Artiste - » courant sur SoundCloud est retiré quand il nomme un des artistes.
+    Le préfixe « Artiste - » courant sur SoundCloud et YouTube est retiré quand il nomme un des
+    artistes.
     """
     editions: list[str] = []
-    text = title
-    names = {artist_name_key(name) for name in artist_names} - {""}
-    if (prefix := _DASH_PREFIX.match(text)) and artist_name_key(prefix.group(1)) in names:
-        text = prefix.group(2)
+    text = _without_noise_suffixes(_without_artist_prefix(title, artist_names))
 
     def keep_or_extract(segment: str) -> str:
         folded = fold(segment).strip()
@@ -151,8 +206,17 @@ def canonical_artists(names: Mapping[str, str], aliases: Aliases | None = None) 
         if name_key := artist_name_key(name):
             by_name[name_key][_platform(key)].append(key)
     for platforms in by_name.values():
+        for platform in SAME_NAME_PLATFORMS & set(platforms):
+            first, *others = platforms[platform]
+            for other in others:
+                join(first, other)
         # Fusion automatique seulement entre plateformes, et sans homonyme sur l'une d'elles.
-        if len(platforms) < 2 or any(len(same) > 1 for same in platforms.values()):
+        homonyms = any(
+            len(same) > 1
+            for platform, same in platforms.items()
+            if platform not in SAME_NAME_PLATFORMS
+        )
+        if len(platforms) < 2 or homonyms:
             continue
         first, *others = (same[0] for same in platforms.values())
         for other in others:
@@ -200,6 +264,9 @@ def _same_release(a: _View, b: _View) -> bool:
     if a.title_key != b.title_key or a.edition_key != b.edition_key or not a.artists & b.artists:
         return False
     if a.platform == b.platform:
+        if a.type == b.type == "video":
+            # Clip, audio et lyric video d'un même titre, souvent publiés à quelques jours d'écart.
+            return a.start - TOLERANCE <= b.end and b.start - TOLERANCE <= a.end
         # Jumeaux explicit / clean : même date, même type, même nombre de titres.
         return (a.date, a.type, a.tracks) == (b.date, b.type, b.tracks)
     if a.precision == "year" and b.precision == "year":

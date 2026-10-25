@@ -7,6 +7,7 @@ from newrel.dedup import (
     artist_id,
     artist_name_key,
     canonical_artists,
+    clean_title,
     cluster,
     release_id,
     split_title,
@@ -39,7 +40,7 @@ def link(
     day: str,
     *,
     kind: str = "album",
-    tracks: int = 10,
+    tracks: int | None = 10,
     platform: str = "spotify",
     artist: str = "spotify:artist:A1",
 ) -> LinkState:
@@ -168,3 +169,51 @@ def test_identifiant_de_sortie_stable() -> None:
     assert release_id("spotify:album:a") == release_id("spotify:album:a")
     assert release_id("spotify:album:a").startswith("r_")
     assert release_id("spotify:album:a") != release_id("spotify:album:b")
+
+
+@pytest.mark.parametrize(
+    ("title", "names", "key", "shown"),
+    [
+        ("Nora Velasco - Nuit (Official Music Video)", ["Nora Velasco"], "nuit", "Nuit"),
+        ("Nuit | Clip officiel | 4K", [], "nuit", "Nuit"),
+        ("Nora Velasco ft. Kid - Nuit [Vidéo officielle]", ["NoraVelascoVEVO"], "nuit", "Nuit"),
+        ("Nuit (feat. Kid) (Official Audio)", [], "nuit", "Nuit (feat. Kid)"),
+        ("Nuit (Lyrics)", [], "nuit", "Nuit"),
+        ("Nuit - Official 4K Video", [], "nuit", "Nuit"),
+        ("Nuit (Remix) [Audio]", [], "nuit", "Nuit (Remix)"),
+        ("Kid - Nuit", ["Nora Velasco"], "kidnuit", "Kid - Nuit"),
+    ],
+)
+def test_titres_youtube(title: str, names: list[str], key: str, shown: str) -> None:
+    assert split_title(title, names)[0] == key
+    assert clean_title(title, names) == shown
+
+
+def test_chaine_vevo_et_chaine_principale_un_seul_artiste() -> None:
+    names = {
+        "youtube:channel:UC1": "Nora Velasco",
+        "youtube:channel:UC2": "NoraVelascoVEVO",
+        "spotify:artist:A1": "Nora Velasco",
+    }
+    canonical = canonical_artists(names)
+    assert len(set(canonical.values())) == 1
+    assert canonical["youtube:channel:UC2"] == artist_id("spotify:artist:A1")
+
+
+def test_clip_rejoint_le_single_et_les_autres_videos_du_titre() -> None:
+    def video(key: str, title: str, day: str) -> LinkState:
+        return link(key, title, day, kind="video", tracks=None, platform="youtube")
+
+    links = {
+        "spotify:album:s": link("spotify:album:s", "Nuit", "2026-10-16", kind="single", tracks=1),
+        "spotify:album:a": link("spotify:album:a", "Nuit", "2026-10-16", tracks=10),
+        "youtube:video:c": video("youtube:video:c", "Nuit (Clip officiel)", "2026-10-15"),
+        "youtube:video:l": video("youtube:video:l", "Nuit (Lyric Video)", "2026-10-19"),
+        "youtube:video:x": video("youtube:video:x", "Nuit (Live)", "2026-10-19"),
+    }
+    # Le clip et la lyric video rejoignent le single, pas l'album ; la version live reste à part.
+    assert sorted(cluster(links)) == [
+        ["spotify:album:a"],
+        ["spotify:album:s", "youtube:video:c", "youtube:video:l"],
+        ["youtube:video:x"],
+    ]

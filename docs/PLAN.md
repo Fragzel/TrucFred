@@ -6,7 +6,7 @@
 
 | Sujet | Décision |
 |---|---|
-| Plateformes | **Spotify + SoundCloud**. YouTube Music est retiré, puisque tu ne l'utilises pas ; son analyse reste au §1.2 au cas où. |
+| Plateformes | **Spotify + SoundCloud**, puis **YouTube** (ajouté le 25/10, voir ci-dessous). YouTube Music reste hors périmètre, puisque tu ne l'utilises pas. |
 | Abonnements payants | Spotify Premium ✔ (obligatoire pour l'API en Development Mode) · SoundCloud Artist Pro ✔ (obligatoire pour l'API) |
 | Visibilité | Repo **public**, données **en clair**. Le site est en `noindex` mais reste accessible à qui a l'URL. |
 | Fréquence | **1 run par jour** (vers 6 h 17, heure de Paris), plus un déclenchement manuel |
@@ -14,6 +14,17 @@
 | Contenus | Albums, EP, singles et nouveaux sons **publiés par les artistes eux-mêmes** : pas de featurings, de compilations ni de reposts |
 | Emplacement | Le dépôt reste dans OneDrive. Parade : uv copie les paquets dans `.venv` (`link-mode = "copy"`) au lieu de créer des liens durs vers son cache. |
 | Noms | Dépôt public `Fragzel/TrucFred`, site <https://fragzel.github.io/TrucFred/>, package et commande `newrel` |
+
+### Décisions YouTube (25/10/2026)
+
+Tu suis des artistes sur YouTube (pas YouTube Music), au milieu de nombreux abonnements sans rapport avec la musique.
+
+| Sujet | Décision |
+|---|---|
+| Ce qui compte comme une sortie | **Clips et audios officiels** : vidéos longues en catégorie Musique (ou avec une mention explicite), sans Shorts, lives, teasers, making-of ni interviews. Un clip rejoint la carte du single du même titre. |
+| Connaissance des abonnements | **Abonnements publics + clé API**, synchro quotidienne. D'abord prévue en OAuth, l'idée est abandonnée le même jour : en mode « Test », le refresh token meurt au bout de 7 jours sans renouvellement possible sans clic, et tu ne veux pas publier l'app Google. Le compte rend donc ses abonnements publics, et une clé API, qui n'expire pas, suffit à les lire. |
+| Tri des abonnements | **Automatique, avec revue des cas douteux** : `newrel triage youtube` ne demande ton avis que sur les chaînes douteuses (`--all` pour tout revoir) et range tes réponses dans `youtube.toml`. |
+| Labels et chaînes de promo | **Suivis comme des artistes** (décidé le 25/10 après un premier passage sur les 313 abonnements réels) : leurs sorties comptent aussi. Le tri ne distingue pas un label d'une chaîne de promo (les deux publient des titres de plusieurs artistes) ; une chaîne trop prolifique se masque sur la page ou s'écarte dans `youtube.toml`. |
 
 ## 1. Faisabilité par plateforme
 
@@ -63,7 +74,7 @@ Règles d'usage (Developer Policy) :
 - Le catalogue passe par **Client Credentials** + `market`, avec `GET /artists/{id}/albums` appelé une fois par groupe (`album`, puis `single`).
 - Avantage : si le token utilisateur expire, seuls les nouveaux abonnements cessent d'être détectés. Les sorties des artistes déjà connus continuent d'arriver.
 
-### 1.2 YouTube Music : ⚠️ à contourner, donc **hors périmètre**
+### 1.2 YouTube : ✅ faisable avec la Data API v3 (YouTube Music reste **hors périmètre**)
 
 YouTube Music n'a pas d'API officielle. Voici le comparatif des trois voies, conservé pour référence :
 
@@ -73,7 +84,14 @@ YouTube Music n'a pas d'API officielle. Voici le comparatif des trois voies, con
 | (b) `ytmusicapi` 1.12.3 (16/09/2026, Python ≥ 3.10) | Les vrais albums et singles de chaque artiste (`get_artist`), mais **avec l'année seulement** ; les abonnements YTM (`get_library_subscriptions`, authentifié) | Pas d'auth pour les données publiques. OAuth : depuis novembre 2024, il faut son propre client Google de type « TVs and Limited Input devices ». Cookies navigateur valables environ 2 ans | API non documentée, donc contraire aux règles YouTube (III.D.7, III.E.6). Elle casse à chaque changement du client web (correctifs de parsing en 2025-2026). Les IP des runners peuvent être bloquées. Mettre les cookies du compte dans le CI fait courir un risque au compte |
 | (c) Flux RSS de chaîne (`/feeds/videos.xml?channel_id=UC…`) | Les 15 dernières vidéos environ | Aucune auth, aucun quota | 404 intermittents signalés depuis décembre 2025 (source tierce). Des vidéos uniquement |
 
-Verdict : j'aurais retenu un hybride, avec (a) pour les abonnements et (b) sans compte pour les sorties. **Écarté**, puisque tu n'utilises pas YouTube Music. Comme les sources sont isolées dans l'architecture, on pourra l'ajouter plus tard sans refonte.
+Verdict du 21/10 : j'aurais retenu un hybride, avec (a) pour les abonnements et (b) sans compte pour les sorties. **Écarté**, puisque tu n'utilises pas YouTube Music.
+
+**Retenu le 25/10, pour YouTube tout court : (a) seul.** Les sorties sont les vidéos des chaînes, ce que (a) donne directement ; (b) n'apporterait que les albums YouTube Music, sans intérêt ici.
+- Abonnements : `subscriptions.list` (`channelId=…`, abonnements publics), 50 par appel, avec une simple clé API. Des abonnements privés donnent un 403 `subscriptionForbidden`.
+- Tri : `channels.list` (sujets `topicDetails`, 50 chaînes par appel), puis, pour les cas douteux, un échantillon des dernières vidéos (`playlistItems.list` + `videos.list` : catégorie, durée, titres).
+- Sorties : playlist `UULF…` de chaque chaîne (vidéos longues, sans Shorts ni lives), non documentée, avec repli sur la playlist `UU…` de toutes les vidéos ; détail par `videos.list`, 50 vidéos par appel.
+- Coût : environ 1 unité par chaîne suivie et par run, sur 10 000 par jour. Un quota épuisé arrive en **403 `quotaExceeded`** (et non en 429) ; il repart à minuit, heure du Pacifique.
+- Les flux RSS (c) restent écartés (404 intermittents).
 
 ### 1.3 SoundCloud : ✅ faisable avec Artist Pro (API officielle)
 
@@ -107,6 +125,7 @@ Verdict : j'aurais retenu un hybride, avec (a) pour les abonnements et (b) sans 
 |---|---|---|---|
 | Spotify | Faisable | API officielle : Authorization Code pour les abonnements, Client Credentials pour le catalogue | Premium |
 | SoundCloud | Faisable | API officielle : Client Credentials | Artist Pro |
+| YouTube | Faisable | API officielle (Data API v3) : clé API, abonnements publics, tri automatique des chaînes | Gratuit (quota de 10 000 unités par jour) |
 | YouTube Music | À contourner | hors périmètre | — |
 
 ## 2. Architecture proposée
@@ -415,6 +434,9 @@ Au-delà d'environ 1 000 artistes, on ne vérifierait plus qu'une fois par semai
   - La branche `data` n'a pas d'historique et les données sont rafraîchies chaque jour.
   - Mais une fenêtre de 90 jours dépasse ce qu'on peut appeler un « cache de session ». Le risque résiduel reste faible pour un usage personnel.
   - Il faut aussi créditer l'uploader et SoundCloud, et mettre un lien vers chaque son.
+- **YouTube** (YouTube API Services Developer Policies) :
+  - les données stockées doivent être rafraîchies ou supprimées tous les 30 jours (III.E.4) : chaque chaîne suivie est relue à chaque run, mais une vidéo sortie des 20 dernières reste stockée sans être relue jusqu'à la fin de la fenêtre de 90 jours. Risque résiduel faible pour un usage personnel ;
+  - liens vers YouTube avec son logo, aucun lecteur embarqué, vignettes chargées depuis le CDN de YouTube.
 - GitHub Pages n'accepte pas d'usage commercial. Un usage personnel est conforme.
 
 ### 3.6 GitHub et environnement local
@@ -479,6 +501,18 @@ Au-delà d'environ 1 000 artistes, on ne vérifierait plus qu'une fois par semai
 - le test préalable est intégré à `uv run newrel auth soundcloud`.
 
 Il reste à créer l'app (Artist Pro), lancer cette commande, puis valider sur tes vraies données.
+
+### Étape 2b : YouTube (ajoutée le 25/10)
+
+- **Objectif** : les clips et audios officiels des chaînes musicales (artistes, labels, chaînes de promo) parmi tes abonnements YouTube, fusionnés avec Spotify et SoundCloud quand il s'agit de la même sortie.
+- **Fichiers** : `sources/youtube.py` (API, tri, collecte), `sources/youtube_auth.py` (vérification de la clé et de la chaîne), `sources/youtube_triage.py`, `youtube.toml`, `[youtube]` dans `config.toml`, `dedup.py` (mentions YouTube dans les titres, chaîne VEVO = chaîne principale, vidéos d'un même titre regroupées), type de sortie `video`, `site/*` (logo, libellé « Vidéo »), tests et faux service YouTube.
+- **Terminé quand** :
+  - `uv run newrel auth youtube` vérifie que la clé API lit les abonnements publics de la chaîne, puis enregistre `YOUTUBE_API_KEY` et `YOUTUBE_CHANNEL_ID` ;
+  - `uv run newrel triage youtube` classe tes vrais abonnements, et tes réponses aux cas douteux sont respectées par le run suivant ;
+  - aucun log public ne nomme une chaîne écartée ou douteuse ;
+  - un clip d'un single déjà sur Spotify ajoute un lien YouTube à la carte existante, sans nouvelle notification.
+
+**Statut (25/10)** : code terminé et testé contre un faux service YouTube. Il reste à créer la clé API, rendre les abonnements publics, lancer `auth` puis `triage` sur les vrais abonnements, et ajuster les seuils du tri (`NOT_MUSIC_BELOW`, `ARTIST_FROM`… dans `sources/youtube.py`) si les propositions sont trop souvent fausses.
 
 ### Étape 3 : améliorations (indépendantes, dans cet ordre)
 

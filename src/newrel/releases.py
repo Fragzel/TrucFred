@@ -21,7 +21,7 @@ from newrel.models import (
     State,
 )
 
-PLATFORM_ORDER = {"spotify": 0, "soundcloud": 1}
+PLATFORM_ORDER = {"spotify": 0, "soundcloud": 1, "youtube": 2}
 PRECISION_ORDER = {"day": 0, "month": 1, "year": 2}
 
 

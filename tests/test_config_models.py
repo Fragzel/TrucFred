@@ -42,6 +42,12 @@ def test_config_soundcloud_et_aliases_du_depot() -> None:
     assert load_aliases(ROOT / "aliases.toml") == Aliases()
 
 
+def test_tri_youtube_du_depot_valide() -> None:
+    config = load_config(ROOT / "config.toml", youtube_triage=ROOT / "youtube.toml")
+    assert config.youtube.uploads_limit == 20
+    assert isinstance(config.youtube.artists, tuple) and isinstance(config.youtube.ignore, tuple)
+
+
 def test_aliases(tmp_path: Path) -> None:
     path = tmp_path / "aliases.toml"
     path.write_text(

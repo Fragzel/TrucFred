@@ -50,11 +50,27 @@ class SoundCloudConfig:
 
 
 @dataclass(frozen=True)
+class YouTubeConfig:
+    requests_per_second: float = 3.0
+    uploads_limit: int = 20
+    """Dernières vidéos lues par chaîne (une page de playlistItems)."""
+    min_duration_seconds: int = 60
+    max_duration_minutes: int = 20
+    """Au-delà : concert filmé, mix ou album complet plutôt qu'un clip."""
+    time_budget_minutes: float = 15.0
+    max_retry_after_seconds: float = 120.0
+    artists: tuple[str, ...] = ()
+    """Chaînes à suivre quoi qu'en dise le tri automatique (youtube.toml, pas config.toml)."""
+    ignore: tuple[str, ...] = ()
+    """Chaînes à ne jamais suivre (youtube.toml)."""
+
+
+@dataclass(frozen=True)
 class NotifyConfig:
     """Notification ntfy après un run qui trouve des nouveautés (secret NTFY_TOPIC)."""
 
     site_url: str = "https://fragzel.github.io/TrucFred/"
-    types: tuple[str, ...] = ("album", "ep", "single", "track")
+    types: tuple[str, ...] = ("album", "ep", "single", "track", "video")
     max_items: int = 10
     server: str = "https://ntfy.sh"
 
@@ -74,11 +90,13 @@ class Config:
     schedule_grace_minutes: int = 45
     spotify: SpotifyConfig = field(default_factory=SpotifyConfig)
     soundcloud: SoundCloudConfig = field(default_factory=SoundCloudConfig)
+    youtube: YouTubeConfig = field(default_factory=YouTubeConfig)
     notify: NotifyConfig = field(default_factory=NotifyConfig)
 
 
-SECTIONS = ("spotify", "soundcloud", "notify")
-RELEASE_TYPES = frozenset({"album", "ep", "single", "track"})
+SECTIONS = ("spotify", "soundcloud", "youtube", "notify")
+RELEASE_TYPES = frozenset({"album", "ep", "single", "track", "video"})
+TRIAGE_KEYS = ("artists", "ignore")
 
 
 @dataclass(frozen=True)
@@ -102,14 +120,18 @@ def _section[T](cls: type[T], values: dict[str, Any], name: str) -> T:
     return cls(**values)
 
 
-def load_config(path: Path) -> Config:
-    """Lit config.toml ; les clés absentes gardent leur valeur par défaut."""
-    if not path.exists():
-        return Config()
-    try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except tomllib.TOMLDecodeError as exc:
-        raise ConfigError(f"{path} : {exc}") from exc
+def load_config(path: Path, *, youtube_triage: Path | None = None) -> Config:
+    """Lit config.toml ; les clés absentes gardent leur valeur par défaut.
+
+    Le tri des abonnements YouTube vient d'un fichier à part (youtube.toml), tenu par
+    « newrel triage youtube ».
+    """
+    data: dict[str, Any] = {}
+    if path.exists():
+        try:
+            data = tomllib.loads(path.read_text(encoding="utf-8"))
+        except tomllib.TOMLDecodeError as exc:
+            raise ConfigError(f"{path} : {exc}") from exc
     unknown = sorted(set(data) - {"general", *SECTIONS})
     if unknown:
         raise ConfigError(f"{path} : section(s) inconnue(s) : {', '.join(unknown)}")
@@ -119,11 +141,19 @@ def load_config(path: Path) -> Config:
     if bad_groups or not spotify.groups:
         raise ConfigError(f"[spotify] groups invalides : {', '.join(bad_groups) or 'liste vide'}")
     soundcloud = _section(SoundCloudConfig, data.get("soundcloud", {}), "soundcloud")
+    youtube_values = data.get("youtube", {})
+    if misplaced := sorted(set(youtube_values) & set(TRIAGE_KEYS)):
+        raise ConfigError(f"[youtube] {', '.join(misplaced)} : à ranger dans youtube.toml")
+    youtube = _section(YouTubeConfig, youtube_values, "youtube")
+    if youtube_triage is not None:
+        youtube = replace(youtube, **load_youtube_triage(youtube_triage))
     notify = _section(NotifyConfig, data.get("notify", {}), "notify")
     if bad_types := sorted(set(notify.types) - RELEASE_TYPES):
         raise ConfigError(f"[notify] types inconnus : {', '.join(bad_types)}")
     general = _section(Config, data.get("general", {}), "general")
-    config = replace(general, spotify=spotify, soundcloud=soundcloud, notify=notify)
+    config = replace(
+        general, spotify=spotify, soundcloud=soundcloud, youtube=youtube, notify=notify
+    )
     try:
         ZoneInfo(config.timezone)
     except (ZoneInfoNotFoundError, ValueError) as exc:
@@ -157,6 +187,27 @@ def load_aliases(path: Path) -> Aliases:
     if data:
         raise ConfigError(f"{path} : section(s) inconnue(s) : {', '.join(sorted(data))}")
     return Aliases(same=groups["same"], never=groups["never"])
+
+
+def load_youtube_triage(path: Path) -> dict[str, tuple[str, ...]]:
+    """Lit youtube.toml : listes « artists » et « ignore » de chaînes (UC… ou @handle)."""
+    if not path.exists():
+        return {key: () for key in TRIAGE_KEYS}
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"{path} : {exc}") from exc
+    if unknown := sorted(set(data) - set(TRIAGE_KEYS)):
+        raise ConfigError(f"{path} : clé(s) inconnue(s) : {', '.join(unknown)}")
+    lists: dict[str, tuple[str, ...]] = {}
+    for key in TRIAGE_KEYS:
+        values = data.get(key, [])
+        if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+            raise ConfigError(f"{path} : {key} doit être une liste de chaînes (UC… ou @…)")
+        lists[key] = tuple(value.strip() for value in values if value.strip())
+    if both := sorted({v.lower() for v in lists["artists"]} & {v.lower() for v in lists["ignore"]}):
+        raise ConfigError(f"{path} : à la fois dans artists et ignore : {', '.join(both)}")
+    return lists
 
 
 def ask_env(name: str, *, hidden: bool = False, prompt: str | None = None) -> str:

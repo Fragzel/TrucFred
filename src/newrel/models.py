@@ -8,6 +8,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from newrel.styles import Style
+
 Platform = Literal["spotify", "soundcloud", "youtube"]
 ReleaseType = Literal["album", "ep", "single", "track", "video"]
 Precision = Literal["year", "month", "day"]
@@ -47,11 +49,16 @@ class SourceItem(Model):
     cover: str | None = None
     parent: str | None = None
     """Album ou EP SoundCloud qui contient ce son : la carte de l'album le couvre."""
+    genres: list[str] | None = None
+    """Genres de la sortie qui désignent un style (genre et tags SoundCloud, sujets et tags
+    YouTube). None : lue avant le 25/10/2026, quand les genres n'étaient pas collectés."""
 
 
 class FollowedArtist(Model):
     key: str
     name: str
+    genres: list[str] = Field(default_factory=list)
+    """Genres de l'artiste (Spotify), ou sujets et mots-clés de la chaîne (YouTube)."""
 
 
 # --- state.json -------------------------------------------------------------------------------
@@ -140,6 +147,10 @@ class Release(Model):
     tracks: int | None = None
     cover: Cover | None = None
     links: list[Link]
+    styles: list[Style] = Field(default_factory=list)
+    """Un ou deux styles, le principal d'abord ; vide quand aucune plateforme n'en dit rien."""
+    genres: list[str] = Field(default_factory=list)
+    """Genres des plateformes qui justifient ces styles (affichés au survol, cherchables)."""
 
 
 class SourceSummary(Model):

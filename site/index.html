@@ -43,6 +43,7 @@
         <input id="q" type="search" placeholder="Artiste ou titre" aria-label="Rechercher un artiste ou un titre" autocomplete="off">
         <fieldset id="platforms" class="chips" hidden><legend>Plateformes</legend></fieldset>
         <fieldset id="types" class="chips" hidden><legend>Types</legend></fieldset>
+        <select id="style" class="style-menu" aria-label="Style musical" hidden></select>
         <label class="toggle"><input id="new-only" type="checkbox"> Nouveautés seulement</label>
         <button id="reset" type="button" class="reset">Réinitialiser</button>
         <button id="mark-all" type="button" class="reset" hidden>Tout marquer comme vu</button>
@@ -126,6 +127,7 @@
           </p>
           <h3 class="title"></h3>
           <p class="artists"></p>
+          <p class="styles" hidden></p>
           <p class="details"><time class="date"></time><span class="tracks"></span></p>
           <p class="links"></p>
           <p class="actions">

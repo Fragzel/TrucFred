@@ -357,3 +357,49 @@ def test_clip_youtube_rejoint_le_single_spotify(tmp_path, fake_spotify, fake_you
     assert published(tmp_path)["sources"]["youtube"]["followed"] == 1
     state = (tmp_path / "data" / "state.json").read_text(encoding="utf-8")
     assert "Jeux et Astuces" not in state  # une chaîne écartée n'est jamais enregistrée
+
+
+def test_styles_de_la_sortie_puis_de_l_artiste_sur_une_autre_plateforme(
+    tmp_path, fake_spotify, fake_soundcloud
+) -> None:
+    fake_spotify.follow(("A1", "Nora Velasco"))
+    fake_spotify.genres["A1"] = ["frenchcore", "hardcore techno"]
+    single = album("s1", "Lumières froides", "2026-10-16", artists=(("A1", "Nora Velasco"),))
+    fake_spotify.publish("A1", "single", single)
+    user = sc_user(10, "Nora Velasco", permalink="noravelasco")
+    fake_soundcloud.follow(user)
+    fake_soundcloud.upload(
+        user,
+        sc_track(5, "Nuit blanche", "2026/10/15 10:00:00 +0000", user),
+        sc_track(6, "Acide", "2026/10/14 10:00:00 +0000", user, genre="Techno"),
+    )
+    run(tmp_path, env=ENV | SC_ENV)
+    releases = by_title(tmp_path)
+    assert releases["Lumières froides"]["styles"] == ["hardcore"]
+    assert releases["Lumières froides"]["genres"] == ["frenchcore", "hardcore techno"]
+    assert releases["Nuit blanche"]["styles"] == ["hardcore"]  # par l'artiste, suivi sur Spotify
+    assert releases["Acide"]["styles"] == ["techno"]  # son genre l'emporte sur celui de l'artiste
+    assert releases["Acide"]["genres"] == ["Techno"]
+
+
+def test_etat_d_avant_les_genres_relu_une_seule_fois(tmp_path, fake_soundcloud) -> None:
+    user = sc_user(10, "Nora Velasco", permalink="noravelasco")
+    fake_soundcloud.follow(user)
+    fake_soundcloud.upload(
+        user,
+        sc_track(5, "Nuit", "2026/10/15 10:00:00 +0000", user, genre="Gabber"),
+        sc_track(4, "Supprimé", "2026/10/14 10:00:00 +0000", user),
+    )
+    run(tmp_path, env=SC_ENV)
+    path = tmp_path / "data" / "state.json"
+    state = json.loads(path.read_text(encoding="utf-8"))
+    for link in state["links"].values():
+        del link["item"]["genres"]  # état écrit avant le 25/10/2026
+    path.write_text(json.dumps(state), encoding="utf-8")
+    fake_soundcloud.tracks[user["urn"]].pop()  # « Supprimé » ne sera plus jamais revu
+    calls = fake_soundcloud.catalog_calls
+    run(tmp_path, env=SC_ENV, now=NOW + DAY)
+    assert fake_soundcloud.catalog_calls == calls + 2  # compteurs stables, mais relu en entier
+    assert by_title(tmp_path)["Nuit"]["styles"] == ["hardcore"]
+    run(tmp_path, env=SC_ENV, now=NOW + 2 * DAY)
+    assert fake_soundcloud.catalog_calls == calls + 2  # plus rien à relire

@@ -268,6 +268,22 @@ h1 {
   border-color: var(--accent);
 }
 
+.style-menu {
+  max-width: 100%;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.style-menu[hidden] {
+  display: none;
+}
+
 .toggle {
   display: inline-flex;
   align-items: center;
@@ -557,6 +573,15 @@ h1 {
   overflow: hidden;
   color: var(--muted);
   font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Style sous les artistes : une ligne, le détail des genres au survol. */
+.styles {
+  overflow: hidden;
+  color: var(--accent);
+  font-size: 0.72rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

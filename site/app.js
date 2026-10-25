@@ -1,6 +1,10 @@
 // Page des nouvelles sorties : charge releases.json, affiche onglets, filtres et cartes.
 import {
+  ALL_ELECTRO,
+  ELECTRO_STYLES,
+  NO_STYLE,
   PLATFORM_LABELS,
+  STYLE_LABELS,
   TYPE_LABELS,
   dayToUtc,
   emptyMarks,
@@ -16,6 +20,7 @@ import {
   parseHash,
   parseMarks,
   releasesForTab,
+  styleCounts,
   tabCounts,
   tabOf,
   toggleFavorite,
@@ -376,6 +381,37 @@ function renderFilters() {
   $("#new-only").checked = page.filters.newOnly;
 }
 
+/** Menu « Style » : seulement les styles présents, avec leur nombre de sorties (autres filtres
+ * appliqués), l'électro groupée en sous-styles. */
+function renderStyleMenu(pool) {
+  const menu = $("#style");
+  const counts = styleCounts(pool);
+  const selected = page.filters.style;
+  const option = (value, text) =>
+    Object.assign(document.createElement("option"), { value, textContent: `${text} (${counts[value] ?? 0})` });
+  const shown = (value) => counts[value] || value === selected;
+  const group = (label, options) => {
+    const node = Object.assign(document.createElement("optgroup"), { label });
+    node.append(...options);
+    return options.length ? [node] : [];
+  };
+  const electro = ELECTRO_STYLES.filter(shown).map((style) =>
+    option(style, style === "electro" ? "Autre électro" : STYLE_LABELS[style]),
+  );
+  const others = Object.keys(STYLE_LABELS)
+    .filter((style) => !ELECTRO_STYLES.includes(style) && shown(style))
+    .map((style) => option(style, STYLE_LABELS[style]));
+  menu.replaceChildren(
+    Object.assign(document.createElement("option"), { value: "", textContent: "Tous les styles" }),
+    ...group("Électro", electro.length ? [option(ALL_ELECTRO, "Toute l'électro"), ...electro] : []),
+    ...group("Autres styles", others),
+    ...(shown(NO_STYLE) ? [option(NO_STYLE, "Sans style connu")] : []),
+  );
+  menu.value = selected ?? "";
+  // Données d'avant les styles : pas de menu, plutôt qu'un menu réduit à « Sans style connu ».
+  menu.hidden = !selected && counts[NO_STYLE] === pool.length;
+}
+
 function readFilters() {
   const selection = (name) => {
     const inputs = [...document.querySelectorAll(`input[name="${name}"]`)];
@@ -387,6 +423,7 @@ function readFilters() {
     query: $("#q").value.trim(),
     platforms: selection("platform"),
     types: selection("type"),
+    style: $("#style").value || null,
     newOnly: $("#new-only").checked,
   };
 }
@@ -425,6 +462,10 @@ function card(release, fresh) {
   const artists = node.querySelector(".artists");
   artists.textContent = release.artists.map((artist) => artist.name).join(", ");
   artists.title = artists.textContent;
+  const styles = node.querySelector(".styles");
+  styles.textContent = (release.styles ?? []).map((style) => STYLE_LABELS[style] ?? style).join(" · ");
+  styles.hidden = !styles.textContent;
+  if (release.genres?.length) styles.title = `Genres : ${release.genres.join(", ")}`;
   const date = node.querySelector(".date");
   date.textContent = releaseDate(release);
   date.dateTime = release.date;
@@ -476,6 +517,7 @@ function render() {
   const fresh = (release) => isNew(release, page.now, rules, timezone);
   const pool = releasesForTab(releases, page.marks, page.filters.tab);
   page.visible = pool.filter((release) => matches(release, page.filters, fresh));
+  renderStyleMenu(pool.filter((release) => matches(release, { ...page.filters, style: null }, fresh)));
   renderTabs();
   const fragment = document.createDocumentFragment();
   for (const { week, releases: items } of groupByWeek(page.visible)) {

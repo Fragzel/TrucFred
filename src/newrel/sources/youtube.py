@@ -18,6 +18,10 @@ Les logs du dépôt sont publics : ils ne nomment jamais une chaîne écartée o
 
 Quota : 10 000 unités par jour, remises à zéro à minuit (heure du Pacifique). Chaque appel fait
 ici coûte 1 unité, soit environ une par chaîne suivie et par run.
+
+Genres : sujets (topicDetails) et tags de chaque vidéo, sujets et mots-clés de chaque chaîne,
+lus dans les appels déjà faits. Les tags et mots-clés ne comptent que dans les familles de
+leurs sujets : une vidéo d'électro taguée « r&b » pour être trouvée reste de l'électro.
 """
 
 from __future__ import annotations
@@ -33,7 +37,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from newrel import dates
+from newrel import dates, styles
 from newrel.config import YouTubeConfig
 from newrel.dedup import artist_name_key, clean_title, fold, split_prefix
 from newrel.http import HttpClient, HttpError, RateLimited, json_body, mask
@@ -46,6 +50,7 @@ API_URL = "https://www.googleapis.com/youtube/v3"
 PAGE_SIZE = 50  # maximum de subscriptions, channels et videos par appel
 MAX_SUBSCRIPTION_PAGES = 40  # 2 000 abonnements
 MUSIC_CATEGORY = "10"
+CHANNEL_PARTS = "snippet,contentDetails,topicDetails,brandingSettings"  # toujours 1 unité
 QUOTA_TZ = ZoneInfo("America/Los_Angeles")
 PRIVATE_HINT = (
     "abonnements privés : dans les paramètres YouTube (Confidentialité), décoche « Garder tous mes"
@@ -110,6 +115,8 @@ class Channel:
     topics: tuple[str, ...] = ()
     """Pages Wikipédia de topicDetails : « Music », « Hip_hop_music »…"""
     uploads: str | None = None
+    keywords: tuple[str, ...] = ()
+    """Mots-clés de la chaîne (brandingSettings) : souvent ses genres."""
 
     @property
     def key(self) -> str:
@@ -118,6 +125,10 @@ class Channel:
     @property
     def url(self) -> str:
         return f"https://www.youtube.com/channel/{self.id}"
+
+    @property
+    def genres(self) -> list[str]:
+        return _genres(self.topics, self.keywords)
 
 
 class PrivateSubscriptions(HttpError):
@@ -169,9 +180,7 @@ class YouTubeApi:
             return self.channels([match.group(1)]).get(match.group(1))
         match = re.search(r"@([\w.-]+)", text)
         handle = match.group(1) if match else text.strip().rstrip("/").rsplit("/", 1)[-1]
-        page = self.get(
-            "/channels", {"part": "snippet,contentDetails,topicDetails", "forHandle": f"@{handle}"}
-        )
+        page = self.get("/channels", {"part": CHANNEL_PARTS, "forHandle": f"@{handle}"})
         return next((c for c in map(_channel, page.get("items") or []) if c), None)
 
     def subscriptions(self, channel_id: str) -> list[tuple[str, str]]:
@@ -205,11 +214,7 @@ class YouTubeApi:
         for chunk in _chunks(ids, PAGE_SIZE):
             page = self.get(
                 "/channels",
-                {
-                    "part": "snippet,contentDetails,topicDetails",
-                    "id": ",".join(chunk),
-                    "maxResults": PAGE_SIZE,
-                },
+                {"part": CHANNEL_PARTS, "id": ",".join(chunk), "maxResults": PAGE_SIZE},
             )
             for raw in page.get("items") or []:
                 if channel := _channel(raw):
@@ -246,7 +251,11 @@ class YouTubeApi:
         for chunk in _chunks(list(dict.fromkeys(ids)), PAGE_SIZE):
             page = self.get(
                 "/videos",
-                {"part": "snippet,contentDetails", "id": ",".join(chunk), "maxResults": PAGE_SIZE},
+                {
+                    "part": "snippet,contentDetails,topicDetails",
+                    "id": ",".join(chunk),
+                    "maxResults": PAGE_SIZE,
+                },
             )
             for raw in page.get("items") or []:
                 if raw.get("id"):
@@ -264,22 +273,34 @@ def _upload_playlists(channel: Channel) -> list[str]:
     return [*playlists, *([fallback] if fallback else [])]
 
 
-def _channel(raw: dict[str, Any]) -> Channel | None:
-    if not raw.get("id"):
-        return None
-    snippet = raw.get("snippet") or {}
-    topics = tuple(
+def _topics(raw: dict[str, Any]) -> tuple[str, ...]:
+    """« https://en.wikipedia.org/wiki/Hip_hop_music » → « Hip_hop_music »."""
+    return tuple(
         unquote(url.rstrip("/").rsplit("/", 1)[-1])
         for url in (raw.get("topicDetails") or {}).get("topicCategories") or []
         if isinstance(url, str)
     )
+
+
+def _genres(topics: Iterable[str], tags: Iterable[str]) -> list[str]:
+    """Sujets lisibles (« Electronic music »), puis les tags de leurs familles."""
+    named = [topic.replace("_", " ") for topic in topics]
+    return styles.useful([*named, *tags], within=named)
+
+
+def _channel(raw: dict[str, Any]) -> Channel | None:
+    if not raw.get("id"):
+        return None
+    snippet = raw.get("snippet") or {}
     playlists = (raw.get("contentDetails") or {}).get("relatedPlaylists") or {}
+    branding = (raw.get("brandingSettings") or {}).get("channel") or {}
     return Channel(
         id=raw["id"],
         title=snippet.get("title") or raw["id"],
         handle=(snippet.get("customUrl") or "").lower(),
-        topics=topics,
+        topics=_topics(raw),
         uploads=playlists.get("uploads"),
+        keywords=tuple(styles.split_tags(branding.get("keywords"))),
     )
 
 
@@ -379,6 +400,7 @@ def video_to_item(
         date=day.isoformat(),
         precision="day",
         cover=_thumbnail(snippet),
+        genres=_genres(_topics(video), snippet.get("tags") or []),
     )
 
 
@@ -641,7 +663,10 @@ def _followings(
             f"YouTube : {doubtful} chaîne(s) à trier, lance « uv run newrel triage youtube »"
         )
     followed = sorting.followed()
-    artists = [FollowedArtist(key=channel.key, name=channel.title) for channel in followed]
+    artists = [
+        FollowedArtist(key=channel.key, name=channel.title, genres=channel.genres)
+        for channel in followed
+    ]
     ignored = {
         channel.key
         for channel in sorting.channels

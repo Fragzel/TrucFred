@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
+from collections.abc import Iterable
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from newrel import dates, dedup
+from newrel import dates, dedup, styles
 from newrel.config import Aliases, Config
 from newrel.models import (
     Artist,
@@ -43,6 +45,7 @@ def build(
         if not (link.item.parent and link.item.parent in state.links)
     }
     canonical = dedup.canonical_artists(_artist_names(state), artist_aliases)
+    genres = _Genres.of(state, canonical)
     releases: list[Release] = []
     aliases: dict[str, str] = {}
     for keys in dedup.cluster(shown, canonical):
@@ -51,6 +54,12 @@ def build(
         )
         if release.sort_date < cutoff:
             continue
+        release.styles, release.genres = styles.pick(
+            [
+                [genre for key in keys for genre in shown[key].item.genres or []],
+                *genres.around(artist.id for artist in release.artists),
+            ]
+        )
         releases.append(release)
         for key in keys:
             if (old := dedup.release_id(key)) != release.id:
@@ -83,6 +92,37 @@ def _artist_names(state: State) -> dict[str, str]:
     for source in state.sources.values():
         names.update({artist.key: artist.name for artist in source.followings})
     return names
+
+
+class _Genres:
+    """Genres connus de chaque artiste (identifiant commun aux plateformes) : les siens
+    (Spotify, chaîne YouTube) et ceux de ses sorties."""
+
+    def __init__(self) -> None:
+        self.own: dict[str, list[str]] = defaultdict(list)
+        self.releases: dict[str, list[str]] = defaultdict(list)
+
+    @classmethod
+    def of(cls, state: State, canonical: dict[str, str]) -> _Genres:
+        def ident(artist_key: str) -> str:
+            return canonical.get(artist_key) or dedup.artist_id(artist_key)
+
+        known = cls()
+        for source in state.sources.values():
+            for artist in source.followings:
+                known.own[ident(artist.key)] += artist.genres
+        for link in state.links.values():
+            for artist in link.item.artists:
+                known.releases[ident(artist.key)] += link.item.genres or []
+        return known
+
+    def around(self, artist_ids: Iterable[str]) -> tuple[list[str], list[str]]:
+        """Genres des artistes d'une sortie, puis ceux de leurs sorties."""
+        ids = list(artist_ids)
+        return (
+            [genre for artist in ids for genre in self.own.get(artist, [])],
+            [genre for artist in ids for genre in self.releases.get(artist, [])],
+        )
 
 
 def _summary(source: SourceState, state: State) -> SourceSummary:

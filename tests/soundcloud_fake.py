@@ -33,7 +33,15 @@ def sc_user(n: int, username: str, *, permalink: str | None = None) -> dict[str,
     }
 
 
-def sc_track(n: int, title: str, created_at: str, user: dict[str, Any]) -> dict[str, Any]:
+def sc_track(
+    n: int,
+    title: str,
+    created_at: str,
+    user: dict[str, Any],
+    *,
+    genre: str | None = None,
+    tags: str = "",
+) -> dict[str, Any]:
     return {
         "urn": f"soundcloud:tracks:{n}",
         "kind": "track",
@@ -43,6 +51,8 @@ def sc_track(n: int, title: str, created_at: str, user: dict[str, Any]) -> dict[
         "created_at": created_at,
         "access": "playable",
         "sharing": "public",
+        "genre": genre,
+        "tag_list": tags,
         "user": {key: user[key] for key in ("urn", "username", "permalink", "avatar_url")},
     }
 
@@ -55,6 +65,7 @@ def sc_playlist(
     *,
     playlist_type: str = "album",
     tracks: tuple[dict[str, Any], ...] = (),
+    genre: str | None = None,
 ) -> dict[str, Any]:
     return {
         "urn": f"soundcloud:playlists:{n}",
@@ -67,6 +78,8 @@ def sc_playlist(
         "type": playlist_type,
         "track_count": len(tracks),
         "tracks": list(tracks),
+        "genre": genre,
+        "tag_list": "",
         "user": {key: user[key] for key in ("urn", "username", "permalink", "avatar_url")},
     }
 

@@ -1,8 +1,32 @@
-// Fonctions pures de la page : filtres, recherche, semaines, nouveautés, fraîcheur.
+// Fonctions pures de la page : filtres, styles, recherche, semaines, nouveautés, fraîcheur.
 // Aucune dépendance au DOM : testées avec `node --test tests/js/logic.test.js`.
 
 export const TYPE_LABELS = { album: "Album", ep: "EP", single: "Single", track: "Son", video: "Vidéo" };
 export const PLATFORM_LABELS = { spotify: "Spotify", soundcloud: "SoundCloud", youtube: "YouTube" };
+// Styles calculés par newrel (styles.py), dans l'ordre du menu : l'électro d'abord, en sous-styles.
+export const STYLE_LABELS = {
+  hardcore: "Hardcore / Gabber",
+  techno: "Techno",
+  dnb: "Drum & Bass",
+  bass: "Dubstep / Bass",
+  house: "House / Disco",
+  trance: "Trance / Psy",
+  hardstyle: "Hardstyle",
+  electro: "Électro",
+  rap: "Rap",
+  rnb: "R&B / Soul",
+  pop: "Pop",
+  rock: "Rock / Metal",
+  reggae: "Reggae / Dub",
+  jazz: "Jazz / Blues",
+  world: "Latino / Monde",
+  folk: "Folk / Country",
+  classical: "Classique / BO",
+};
+export const ELECTRO_STYLES = ["hardcore", "techno", "dnb", "bass", "house", "trance", "hardstyle", "electro"];
+/** Valeurs du menu « Style » en plus des styles eux-mêmes. */
+export const ALL_ELECTRO = "electro-all";
+export const NO_STYLE = "none";
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
@@ -97,19 +121,48 @@ export function isNew(release, now, rules, timeZone) {
   return age <= rules.new_max_age_days;
 }
 
-/** Filtres : `platforms` et `types` à null acceptent tout. */
+/** Sortie du style choisi : un style, toute l'électro, ou aucun style connu (null : tout). */
+export function hasStyle(release, style) {
+  const styles = release.styles ?? []; // favori gardé avant l'arrivée des styles
+  if (!style) return true;
+  if (style === NO_STYLE) return styles.length === 0;
+  if (style === ALL_ELECTRO) return styles.some((value) => ELECTRO_STYLES.includes(value));
+  return styles.includes(style);
+}
+
+/** Filtres : `platforms` et `types` à null acceptent tout, comme `style`. */
 export function matches(release, filters, isNewRelease) {
   if (filters.platforms && !release.links.some((link) => filters.platforms.has(link.platform))) {
     return false;
   }
   if (filters.types && !filters.types.has(release.type)) return false;
+  if (!hasStyle(release, filters.style)) return false;
   if (filters.newOnly && !isNewRelease(release)) return false;
   const words = fold(filters.query).split(/\s+/).filter(Boolean);
   if (words.length === 0) return true;
+  // Les genres (« gabber », « drill ») se cherchent comme un titre ou un artiste.
   const haystack = fold(
-    [release.title, release.edition ?? "", ...release.artists.map((artist) => artist.name)].join(" "),
+    [
+      release.title,
+      release.edition ?? "",
+      ...release.artists.map((artist) => artist.name),
+      ...(release.styles ?? []).map((style) => STYLE_LABELS[style] ?? style),
+      ...(release.genres ?? []),
+    ].join(" "),
   );
   return words.every((word) => haystack.includes(word));
+}
+
+/** Nombre de sorties par valeur du menu « Style » ; une sortie à deux styles compte pour les deux. */
+export function styleCounts(releases) {
+  const counts = { [ALL_ELECTRO]: 0, [NO_STYLE]: 0 };
+  for (const release of releases) {
+    const styles = release.styles ?? [];
+    for (const style of styles) counts[style] = (counts[style] ?? 0) + 1;
+    if (styles.some((style) => ELECTRO_STYLES.includes(style))) counts[ALL_ELECTRO] += 1;
+    if (styles.length === 0) counts[NO_STYLE] += 1;
+  }
+  return counts;
 }
 
 /** Regroupe par semaine de sortie, la plus récente d'abord. */
@@ -130,11 +183,13 @@ export function groupByWeek(releases) {
 export function parseHash(hash) {
   const params = new URLSearchParams(String(hash ?? "").replace(/^#/, ""));
   const set = (key) => (params.has(key) ? new Set(params.get(key).split(",").filter(Boolean)) : null);
+  const style = params.get("s");
   return {
     tab: TABS.includes(params.get("tab")) ? params.get("tab") : "todo",
     query: params.get("q") ?? "",
     platforms: set("p"),
     types: set("t"),
+    style: style in STYLE_LABELS || style === ALL_ELECTRO || style === NO_STYLE ? style : null,
     newOnly: params.get("new") === "1",
   };
 }
@@ -146,6 +201,7 @@ export function formatHash(filters) {
   if (filters.query) params.set("q", filters.query);
   if (filters.platforms) params.set("p", [...filters.platforms].sort().join(","));
   if (filters.types) params.set("t", [...filters.types].sort().join(","));
+  if (filters.style) params.set("s", filters.style);
   if (filters.newOnly) params.set("new", "1");
   const text = params.toString();
   return text ? `#${text}` : "";

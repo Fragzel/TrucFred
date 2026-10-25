@@ -95,6 +95,14 @@ def test_abonnements_pagines_par_curseur(fake_spotify) -> None:
     assert fake_spotify.following_route.call_count == 3
 
 
+def test_genres_des_artistes_suivis_sans_appel_catalogue(fake_spotify) -> None:
+    fake_spotify.follow(("A1", "Nora Velasco"))
+    fake_spotify.genres["A1"] = ["rap francais", "indie", "pop urbaine"]
+    result = collect_quickly(make_context())
+    assert result.followings[0].genres == ["rap francais", "pop urbaine"]  # « indie » : rien
+    assert fake_spotify.catalog_calls == 2  # comme sans genres : albums et singles
+
+
 def test_refresh_token_expire_fige_les_abonnements(fake_spotify) -> None:
     fake_spotify.refresh_error = "invalid_grant"
     fake_spotify.publish("A1", "single", *singles("s", "2026-10-16"))

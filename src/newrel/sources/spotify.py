@@ -6,6 +6,9 @@ sorties des artistes déjà connus continuent d'arriver via le token d'applicati
 Le catalogue est limité à environ 100 appels par 24 h en Development Mode. Chaque run dépense
 donc un budget fixe, en commençant par les artistes les plus en retard, et ne relit en détail
 un artiste que si son nombre total de sorties a augmenté (un seul appel sinon).
+
+Les genres viennent des artistes suivis (/me/following les donne sans appel catalogue) : Spotify
+n'en donne pas par album.
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from newrel import dates, github
+from newrel import dates, github, styles
 from newrel.http import AuthExpired, HttpClient, HttpError, RateLimited, ensure_ok, json_body, mask
 from newrel.models import FollowedArtist, ItemArtist, SourceItem
 from newrel.sources.base import ArtistCheck, SourceContext, SourceResult, followings_guard
@@ -88,7 +91,12 @@ class SpotifyApi:
             for raw in page.get("items") or []:
                 if raw and raw.get("id"):
                     key = f"spotify:artist:{raw['id']}"
-                    artists.setdefault(key, FollowedArtist(key=key, name=raw.get("name") or ""))
+                    artist = FollowedArtist(
+                        key=key,
+                        name=raw.get("name") or "",
+                        genres=styles.useful(raw.get("genres") or []),
+                    )
+                    artists.setdefault(key, artist)
             after = (page.get("cursors") or {}).get("after")
             if not page.get("next") or not after:
                 return list(artists.values())
@@ -144,6 +152,7 @@ def album_to_item(album: dict[str, Any]) -> SourceItem | None:
         precision=precision,
         tracks=tracks,
         cover=_pick_cover(album.get("images") or []),
+        genres=[],  # ceux de l'artiste suffisent
     )
 
 

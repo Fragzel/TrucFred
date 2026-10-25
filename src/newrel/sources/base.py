@@ -29,6 +29,9 @@ class SourceContext:
     """Dernier run qui a interrogé le catalogue (début de la fenêtre de quota en cours)."""
     peer_names: frozenset[str] = frozenset()
     """Noms des artistes suivis sur les autres plateformes (indice pour le tri YouTube)."""
+    stale_artists: frozenset[str] = frozenset()
+    """Artistes dont des sorties connues ont été lues avant la collecte des genres (SoundCloud
+    les relit une fois en entier)."""
     accept_drop: bool = False
 
 

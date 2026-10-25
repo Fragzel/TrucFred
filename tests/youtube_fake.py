@@ -22,7 +22,12 @@ API = re.escape(API_URL)
 
 
 def yt_channel(
-    n: int, title: str, *, topics: tuple[str, ...] = ("Music",), handle: str | None = None
+    n: int,
+    title: str,
+    *,
+    topics: tuple[str, ...] = ("Music",),
+    handle: str | None = None,
+    keywords: str = "",
 ) -> dict[str, Any]:
     channel_id = f"UC{n:022d}"
     return {
@@ -32,6 +37,7 @@ def yt_channel(
         "topicDetails": {
             "topicCategories": [f"https://en.wikipedia.org/wiki/{topic}" for topic in topics]
         },
+        "brandingSettings": {"channel": {"keywords": keywords}},
     }
 
 
@@ -43,6 +49,8 @@ def yt_video(
     category: str = "10",
     duration: str = "PT3M30S",
     live: str = "none",
+    topics: tuple[str, ...] = ("Music",),
+    tags: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     return {
         "id": video_id,
@@ -51,12 +59,16 @@ def yt_video(
             "title": title,
             "categoryId": category,
             "liveBroadcastContent": live,
+            "tags": list(tags),
             "thumbnails": {
                 "default": {"url": f"https://i.ytimg.com/vi/{video_id}/default.jpg"},
                 "medium": {"url": f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg"},
             },
         },
         "contentDetails": {"duration": duration},
+        "topicDetails": {
+            "topicCategories": [f"https://en.wikipedia.org/wiki/{topic}" for topic in topics]
+        },
     }
 
 

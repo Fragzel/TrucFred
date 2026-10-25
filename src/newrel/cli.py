@@ -212,6 +212,9 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
     followed = len(result.followings) if result.followings is not None else "inchangés"
     checked = f"{len(result.checked)} (+{result.pending} en attente)"
     print(f"Abonnements : {followed} · artistes vérifiés : {checked} · appels : {result.calls}")
+    if result.followings:
+        genred = sum(1 for artist in result.followings if artist.genres)
+        print(f"Genres connus pour {genred} abonnement(s) sur {len(result.followings)}")
     for warning in result.warnings:
         print(f"[avertissement] {warning}")
     items = {
@@ -224,7 +227,8 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
     for item in sorted(items.values(), key=lambda item: item.date, reverse=True)[:60]:
         flag = "nouveau" if item.key not in context.known_links else "connu  "
         artists = ", ".join(artist.name for artist in item.artists)
-        print(f"  {item.date:<10}  {flag}  {item.type:<6}  {artists} — {item.title}")
+        genres = f"  [{', '.join(item.genres)}]" if item.genres else ""
+        print(f"  {item.date:<10}  {flag}  {item.type:<6}  {artists} — {item.title}{genres}")
     return 1 if result.status in ("error", "auth_expired") else 0
 
 

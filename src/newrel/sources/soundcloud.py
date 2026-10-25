@@ -3,6 +3,9 @@
 Tes comptes suivis sont publics : /users/{ton_urn}/followings les liste, avec pour chacun le
 nombre de sons et de playlists. Un compte dont ces compteurs n'ont pas bougé ne coûte aucun
 appel ; sinon on relit ses derniers sons et ses playlists (albums, EP, singles).
+
+Les genres sont ceux que l'artiste donne à chaque son ou playlist (genre et tags). Un compte
+dont des sons connus ont été lus avant leur collecte (25/10/2026) est relu une fois en entier.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from newrel import dates
+from newrel import dates, styles
 from newrel.http import HttpClient, HttpError, RateLimited, ensure_ok, json_body, mask
 from newrel.models import FollowedArtist, ItemArtist, ReleaseType, SourceItem
 from newrel.sources.base import ArtistCheck, SourceContext, SourceResult, followings_guard
@@ -144,6 +147,12 @@ def _artwork(url: str | None) -> str | None:
     return url.replace("-large.", "-t300x300.")
 
 
+def _genres(resource: dict[str, Any]) -> list[str]:
+    """Genre déclaré, puis les tags de sa famille (« Techno » : « acid », pas « hip hop »)."""
+    genre = resource.get("genre")
+    return styles.useful([genre, *styles.split_tags(resource.get("tag_list"))], within=[genre])
+
+
 def _uploader(resource: dict[str, Any]) -> list[ItemArtist]:
     user = resource.get("user") or {}
     key = user.get("urn") or (f"soundcloud:users:{user['id']}" if user.get("id") else None)
@@ -170,6 +179,7 @@ def track_to_item(track: dict[str, Any], tz: ZoneInfo) -> SourceItem | None:
         precision="day",
         tracks=1,
         cover=_artwork(track.get("artwork_url") or (track.get("user") or {}).get("avatar_url")),
+        genres=_genres(track),
     )
 
 
@@ -220,6 +230,7 @@ def playlist_to_item(playlist: dict[str, Any], tz: ZoneInfo) -> tuple[SourceItem
         precision="day",
         tracks=tracks,
         cover=cover,
+        genres=_genres(playlist),
     )
     return item, members
 
@@ -332,6 +343,7 @@ def _catalog(
             and count is not None
             and state.catalog_total is not None
             and count <= state.catalog_total
+            and account.key not in ctx.stale_artists
         ):
             # Ni son ni playlist ajoutés depuis le dernier passage : aucun appel.
             result.checked[account.key] = ArtistCheck(

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ALL_ELECTRO,
+  NO_STYLE,
   emptyMarks,
   fold,
   formatHash,
@@ -18,6 +20,7 @@ import {
   parseMarks,
   releaseWeek,
   releasesForTab,
+  styleCounts,
   tabCounts,
   tabOf,
   toggleFavorite,
@@ -40,7 +43,7 @@ const release = (overrides = {}) => ({
   links: [{ platform: "spotify" }],
   ...overrides,
 });
-const noFilter = { tab: "todo", query: "", platforms: null, types: null, newOnly: false };
+const noFilter = { tab: "todo", query: "", platforms: null, types: null, style: null, newOnly: false };
 
 test("la semaine de sortie commence le vendredi", () => {
   assert.equal(releaseWeek("2026-10-16"), "2026-10-16"); // vendredi
@@ -94,6 +97,7 @@ test("onglet et filtres ⇄ hash d'URL", () => {
     query: "nuit blanche",
     platforms: new Set(["spotify"]),
     types: new Set(["single", "ep"]),
+    style: "techno",
     newOnly: true,
   };
   const back = parseHash(formatHash(filters));
@@ -102,11 +106,41 @@ test("onglet et filtres ⇄ hash d'URL", () => {
     query: "nuit blanche",
     platforms: ["spotify"],
     types: ["ep", "single"],
+    style: "techno",
     newOnly: true,
   });
   assert.equal(formatHash(noFilter), "");
   assert.deepEqual(parseHash(""), noFilter);
   assert.equal(parseHash("#tab=inconnu").tab, "todo");
+  assert.equal(parseHash("#s=inconnu").style, null);
+  assert.equal(parseHash(`#s=${ALL_ELECTRO}`).style, ALL_ELECTRO);
+});
+
+test("filtre de style : un style, toute l'électro, ou sans style", () => {
+  const techno = release({ styles: ["techno", "rap"], genres: ["acid techno"] });
+  const rap = release({ styles: ["rap"] });
+  const unknown = release({ styles: [] });
+  const old = release(); // favori gardé avant l'arrivée des styles
+  const kept = (style) =>
+    [techno, rap, unknown, old].filter((item) => matches(item, { ...noFilter, style }, () => true));
+  assert.deepEqual(kept("rap"), [techno, rap]);
+  assert.deepEqual(kept(ALL_ELECTRO), [techno]);
+  assert.deepEqual(kept(NO_STYLE), [unknown, old]);
+  assert.deepEqual(kept(null), [techno, rap, unknown, old]);
+  assert.deepEqual(styleCounts([techno, rap, unknown, old]), {
+    [ALL_ELECTRO]: 1,
+    [NO_STYLE]: 2,
+    techno: 1,
+    rap: 2,
+  });
+});
+
+test("recherche dans les styles et les genres", () => {
+  const techno = release({ styles: ["hardcore"], genres: ["Gabber", "frenchcore"] });
+  const search = (query) => matches(techno, { ...noFilter, query }, () => true);
+  assert.equal(search("gabber"), true);
+  assert.equal(search("hardcore"), true);
+  assert.equal(search("drill"), false);
 });
 
 test("déjà vu : la sortie change d'onglet, et revient si on décoche", () => {

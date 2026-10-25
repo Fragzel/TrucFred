@@ -96,6 +96,16 @@ def test_album_et_ses_sons() -> None:
     assert playlist_to_item(mix, PARIS) == (None, [])
 
 
+def test_genre_declare_et_tags_de_sa_famille() -> None:
+    tags = 'acid "hard techno" hiphop Paris'
+    track = sc_track(1, "Nuit", "2026/10/16 08:00:00 +0000", nora(), genre="Techno", tags=tags)
+    assert track_to_item(track, PARIS).genres == ["Techno", "acid", "hard techno"]
+    untagged = sc_track(2, "Jour", "2026/10/16 08:00:00 +0000", nora(), tags="dnb rap")
+    assert track_to_item(untagged, PARIS).genres == ["dnb", "rap"]  # sans genre : pas de tri
+    album = sc_playlist(7, "Échos", "2026/10/16 09:00:00 +0000", nora(), genre="Drum & Bass")
+    assert playlist_to_item(album, PARIS)[0].genres == ["Drum & Bass"]
+
+
 # --- Collecte -----------------------------------------------------------------------------------
 
 
@@ -145,6 +155,18 @@ def test_compteurs_en_hausse_ou_relecture_mensuelle(fake_soundcloud) -> None:
     assert "soundcloud:tracks:2" in [item.key for item in result.checked[user["urn"]].items]
     collect_soundcloud_quickly(context(artists=known(user, total=2, full_ago=31 * DAY)))
     assert fake_soundcloud.catalog_calls == 4  # compteurs stables, mais relecture du mois
+
+
+def test_compte_lu_avant_les_genres_relu_une_fois(fake_soundcloud) -> None:
+    user = nora()
+    fake_soundcloud.follow(user)
+    fake_soundcloud.upload(
+        user, sc_track(1, "Nuit", "2026/10/10 08:00:00 +0000", user, genre="Gabber")
+    )
+    stale = frozenset({user["urn"]})
+    result = collect_soundcloud_quickly(context(artists=known(user, total=1), stale_artists=stale))
+    assert fake_soundcloud.catalog_calls == 2  # compteurs stables, mais genres à collecter
+    assert result.checked[user["urn"]].items[0].genres == ["Gabber"]
 
 
 def test_comptes_suivis_refuses_en_client_credentials(fake_soundcloud) -> None:

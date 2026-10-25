@@ -196,6 +196,39 @@
           },
           "title": "Links",
           "type": "array"
+        },
+        "styles": {
+          "items": {
+            "enum": [
+              "hardcore",
+              "techno",
+              "dnb",
+              "bass",
+              "house",
+              "trance",
+              "hardstyle",
+              "electro",
+              "rap",
+              "rnb",
+              "pop",
+              "rock",
+              "reggae",
+              "jazz",
+              "world",
+              "folk",
+              "classical"
+            ],
+            "type": "string"
+          },
+          "title": "Styles",
+          "type": "array"
+        },
+        "genres": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Genres",
+          "type": "array"
         }
       },
       "required": [

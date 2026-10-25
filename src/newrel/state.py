@@ -73,6 +73,12 @@ def context_for(
             if name != platform
             for artist in other.followings
         ),
+        stale_artists=frozenset(
+            artist_key
+            for key, link in state.links.items()
+            if key.startswith(prefix) and link.item.genres is None
+            for artist_key in link.via
+        ),
         accept_drop=accept_drop,
     )
 
@@ -121,7 +127,14 @@ def apply_result(
         source.followings_at = now
 
     names = {artist.key: artist.name for artist in source.followings}
+    ungenred = [link for key, link in state.links.items() if key.startswith(prefix)]
+    ungenred = [link for link in ungenred if link.item.genres is None]
     for artist_key, check in result.checked.items():
+        if check.full:
+            # Ce qu'une lecture complète ne revoit pas ne sera pas relu : genres inconnus.
+            for link in ungenred:
+                if artist_key in link.via:
+                    link.item.genres = []
         known = state.artists.get(artist_key)
         for item in check.items:
             if dates.bounds(item.date, item.precision)[1] < cutoff:

@@ -100,6 +100,18 @@ def test_video_en_sortie_titre_nettoye_et_jour_local() -> None:
     assert item.artists[0].key == "youtube:channel:UC" + "0" * 22
 
 
+def test_genres_d_une_video_sujets_puis_tags_de_leurs_familles() -> None:
+    video = yt_video(
+        "abc",
+        "Nora Velasco - Nuit (Clip officiel)",
+        "2026-10-21T10:00:00Z",
+        topics=("Music", "Electronic_music"),
+        tags=("Nora Velasco", "gabber", "r&b", "frenchcore"),
+    )
+    item = video_to_item(video, channel("Nora Velasco"), PARIS, SETTINGS)
+    assert item.genres == ["Electronic music", "gabber", "frenchcore"]  # « r&b » : appât
+
+
 # --- Tri ----------------------------------------------------------------------------------------
 
 
@@ -200,6 +212,22 @@ def test_tri_puis_clips_des_artistes_et_labels(subscriptions) -> None:
     # Logs publics : les chaînes écartées ou douteuses ne sont jamais nommées.
     text = " ".join([*result.warnings, result.message or ""])
     assert "Studio" not in text and "Jeux" not in text
+
+
+def test_genres_des_chaines_suivies_sujets_et_mots_cles(fake_youtube) -> None:
+    label = yt_channel(
+        3,
+        "Techno Cartel",
+        topics=("Music", "Electronic_music"),
+        keywords='Techno "Acid Techno" "Daft Punk" Berlin',  # Daft Punk : pas du rock ici
+    )
+    fake_youtube.subscribe(label, yt_channel(2, "KidMarinVEVO"))
+    fake_youtube.upload(label, *clips("t", 5, artist="Techno Cartel"))
+    result = collect_youtube_quickly(context())
+    assert {artist.name: artist.genres for artist in result.followings} == {
+        "KidMarinVEVO": [],
+        "Techno Cartel": ["Electronic music", "Techno", "Acid Techno"],
+    }
 
 
 def test_decisions_de_youtube_toml(subscriptions) -> None:

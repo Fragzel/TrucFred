@@ -41,7 +41,9 @@
       "links": [
         {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleLumieresFroides", "type": "single", "date": "2026-10-16", "precision": "day"},
         {"platform": "youtube", "url": "https://www.youtube.com/watch?v=sampleLumieres", "type": "video", "date": "2026-10-15", "precision": "day"}
-      ]
+      ],
+      "styles": ["pop"],
+      "genres": ["Pop music", "chanson"]
     },
     {
       "id": "r_5a1e0c0008",
@@ -59,7 +61,9 @@
       "cover": null,
       "links": [
         {"platform": "youtube", "url": "https://www.youtube.com/watch?v=sampleMareeBasse", "type": "video", "date": "2026-10-15", "precision": "day"}
-      ]
+      ],
+      "styles": ["techno"],
+      "genres": ["Electronic music", "acid techno"]
     },
     {
       "id": "r_5a1e0c0002",
@@ -77,7 +81,9 @@
       "cover": null,
       "links": [
         {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleBasseSaison", "type": "ep", "date": "2026-10-16", "precision": "day"}
-      ]
+      ],
+      "styles": ["techno"],
+      "genres": ["acid techno", "tekno"]
     },
     {
       "id": "r_5a1e0c0003",
@@ -98,7 +104,9 @@
       "cover": null,
       "links": [
         {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleNightShift", "type": "album", "date": "2026-10-10", "precision": "day"}
-      ]
+      ],
+      "styles": ["dnb"],
+      "genres": ["liquid funk", "drum and bass"]
     },
     {
       "id": "r_5a1e0c0004",
@@ -116,7 +124,9 @@
       "cover": null,
       "links": [
         {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleToutDoux", "type": "single", "date": "2026-10-09", "precision": "day"}
-      ]
+      ],
+      "styles": ["rap", "rnb"],
+      "genres": ["rap francais", "r&b francais"]
     },
     {
       "id": "r_5a1e0c0005",
@@ -134,7 +144,9 @@
       "cover": null,
       "links": [
         {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleArchivesPerdues", "type": "album", "date": "2026", "precision": "year"}
-      ]
+      ],
+      "styles": ["techno"],
+      "genres": ["acid techno"]
     },
     {
       "id": "r_5a1e0c0006",
@@ -152,7 +164,9 @@
       "cover": null,
       "links": [
         {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleEchos", "type": "album", "date": "2026-09-26", "precision": "day"}
-      ]
+      ],
+      "styles": ["pop"],
+      "genres": ["chanson"]
     },
     {
       "id": "r_5a1e0c0007",
@@ -170,7 +184,9 @@
       "cover": null,
       "links": [
         {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleGhosts", "type": "single", "date": "2026-09-12", "precision": "day"}
-      ]
+      ],
+      "styles": [],
+      "genres": []
     }
   ]
 }

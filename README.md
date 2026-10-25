@@ -202,6 +202,35 @@ la page.
 - **Coût SoundCloud.** La liste de tes comptes suivis donne leur nombre de sons et de playlists.
   Un compte dont ces compteurs n'ont pas bougé ne coûte aucun appel.
 
+## Styles musicaux
+
+Chaque carte affiche un ou deux styles sous le nom de l'artiste ; le survol donne les genres
+d'origine. Le menu « Style » des filtres n'affiche que les sorties d'un style.
+
+- **Une quinzaine de styles.** L'électro, majoritaire, est découpée en sous-styles (Hardcore /
+  Gabber, Techno, Drum & Bass, Dubstep / Bass, House / Disco, Trance / Psy, Hardstyle, et
+  « Autre électro »). Le reste est regroupé en familles : Rap, R&B / Soul, Pop, Rock / Metal,
+  Reggae / Dub, Jazz / Blues, Latino / Monde, Folk / Country, Classique / BO.
+  - Le menu ne propose que les styles présents, avec leur nombre de sorties, plus « Toute
+    l'électro » et « Sans style connu ».
+  - La recherche trouve aussi les genres d'origine : « gabber », « drill »…
+- **D'où viennent les genres**, sans aucun appel en plus :
+  - Spotify : les genres de chaque artiste suivi (Spotify n'en donne pas par album) ;
+  - SoundCloud : le genre et les tags de chaque son ou playlist ;
+  - YouTube : les sujets et les tags de chaque vidéo, les sujets et les mots-clés de chaque
+    chaîne.
+- **Tags appâts.** Les tags d'une vidéo YouTube (ou d'un son SoundCloud) citent souvent d'autres
+  genres pour être trouvés. Seuls ceux de la famille de ses sujets (ou du genre déclaré) comptent.
+- **Choix du style** (`src/newrel/styles.py`) : chaque genre est rangé dans un style par une
+  liste de règles, des plus précises aux plus larges (« hardcore punk » est du rock, « hardcore
+  hip hop » du rap). Une sortie prend d'abord le style de ses propres genres, puis ceux de son
+  artiste, sur n'importe quelle plateforme, puis ceux de l'ensemble de ses sorties. Un deuxième
+  style n'apparaît que s'il pèse au moins la moitié du premier.
+- **Premier run après l'ajout des styles (25/10/2026).** Les comptes SoundCloud dont des sons
+  connus ont été lus avant sont relus une fois en entier : environ 220 comptes, soit 450 appels
+  et 5 minutes de plus, dans le budget de 15 minutes de la source.
+- `uv run newrel fetch <source>` affiche les genres trouvés à côté de chaque sortie.
+
 ## Quota Spotify
 
 En Development Mode, le catalogue Spotify accepte environ **100 appels par 24 h**. Ce chiffre a

@@ -328,7 +328,7 @@ Sorties (comparées seulement entre artistes fusionnés) :
   - `site/logic.js`, des fonctions pures : filtres, recherche insensible aux accents, regroupement, règle « nouveau », fraîcheur.
 - Aucun build ni aucune dépendance. Tests avec `node --test` (Node 22 est installé).
 - Regroupement par **semaine de sortie, du vendredi au jeudi**, puisque les sorties tombent le vendredi. Exemple de titre : « Semaine du ven. 17 oct. ».
-- Filtres : plateforme, type (Album, EP, Single, Son), « nouveautés seulement » et recherche. L'état des filtres est stocké dans le hash de l'URL.
+- Filtres : plateforme, type (Album, EP, Single, Son), style, « nouveautés seulement » et recherche. L'état des filtres est stocké dans le hash de l'URL.
 - Bannière quand `generated_at`, ou le `last_success_at` d'une source, a plus de 36 h. Comme le calcul se fait dans le navigateur, elle détecte aussi un cron désactivé ou un déploiement raté.
 - Les pochettes sont chargées depuis les CDN des plateformes (`loading="lazy"`), jamais recopiées.
 - Attribution :
@@ -529,6 +529,7 @@ Il reste à créer l'app (Artist Pro), lancer cette commande, puis valider sur t
 | 3e | Masquer un compte depuis la page (**fait le 22/10**, ajouté à ta demande) | `site/app.js`, `site/logic.js` | un label masqué disparaît de « À découvrir » et « Déjà vus », pas des favoris ; il se réaffiche depuis la liste en bas de page |
 | 3c | « Déjà vu » et favoris (**fait le 22/10**, avancé à ta demande) | `site/app.js`, `site/logic.js`, `site/index.html` | onglets « À découvrir », « Déjà vus » et « Favoris » ; bouton « Déjà vu » et étoile sur chaque carte ; marques en localStorage indexées par l'identifiant stable ; favoris gardés en copie au-delà de la fenêtre de 90 jours ; export et import en JSON ; les marques survivent à une fusion grâce aux alias |
 | 3d | Page « Artistes » : les plateformes de chaque artiste et les candidats à la fusion | `site/artists.html` | on peut remplir `aliases.toml` sans lire les logs |
+| 3g | Styles musicaux (**fait le 25/10**, ajouté à ta demande) : l'électro en sous-styles (ton choix, vu sa place dans tes abonnements), le reste en familles ; badge sur la carte et menu « Style » | `styles.py`, `sources/*`, `releases.py`, `site/*` | chaque sortie dont une plateforme donne un genre a un ou deux styles ; le menu n'affiche qu'un style, ou toute l'électro ; la recherche trouve les genres d'origine ; aucun appel d'API en plus, hors la relecture unique des comptes SoundCloud |
 | 3f | Bouton « Lancer la mise à jour » quand le cron est en retard (**fait le 25/10**, ajouté à ta demande), avec un seul passage Spotify par 24 h | `sources/spotify.py`, `site/app.js`, `site/logic.js`, `schedule_*` et `quota_window_hours` dans `config.toml` | le bouton n'apparaît qu'après 6 h 17 + 45 min sans run, ou quand le quota Spotify est revenu sans être utilisé ; un run lancé avant la fin des 24 h ne fait aucun appel catalogue ; avec un token *Actions* gardé dans le navigateur, un clic lance le workflow, et sans token, il mène à la page du workflow |
 
 ## 5. Structure du repo et dépendances

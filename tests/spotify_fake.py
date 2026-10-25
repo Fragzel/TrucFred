@@ -60,6 +60,8 @@ def album(
 class FakeSpotify:
     def __init__(self, router: respx.MockRouter) -> None:
         self.followed: list[tuple[str, str]] = []
+        self.genres: dict[str, list[str]] = {}
+        """Genres de chaque artiste suivi, renvoyés par /me/following."""
         self.albums: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
         self.refresh_error: str | None = None  # "invalid_grant" pour simuler l'expiration
         self.tokens_down = False
@@ -113,7 +115,13 @@ class FakeSpotify:
         chunk = self.followed[start : start + limit]
         more = start + limit < len(self.followed)
         items = [
-            {"id": artist_id, "name": name, "type": "artist", "uri": f"spotify:artist:{artist_id}"}
+            {
+                "id": artist_id,
+                "name": name,
+                "type": "artist",
+                "uri": f"spotify:artist:{artist_id}",
+                "genres": self.genres.get(artist_id, []),
+            }
             for artist_id, name in chunk
         ]
         page = {

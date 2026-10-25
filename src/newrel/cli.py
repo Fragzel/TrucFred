@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from newrel import __version__, dates, pipeline, site
+from newrel import __version__, dates, pipeline, protect, site
 from newrel.config import ConfigError, load_aliases, load_config, load_env_file
 from newrel.models import State, releases_schema
 from newrel.sources import SOURCES
@@ -64,9 +64,11 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     auth = commands.add_parser(
-        "auth", help="mise en route d'une source (Spotify : à refaire tous les ~6 mois)"
+        "auth",
+        help="mise en route d'une source (Spotify : à refaire tous les ~6 mois), des"
+        " notifications (ntfy) ou du mot de passe de la page (site)",
     )
-    auth.add_argument("source", choices=["spotify", "soundcloud", "ntfy"])
+    auth.add_argument("source", choices=["spotify", "soundcloud", "ntfy", "site"])
     auth.add_argument("--port", type=int, default=8888, help="Spotify : port du retour OAuth")
     auth.add_argument("--profile", help="SoundCloud : adresse de ton profil soundcloud.com")
     auth.add_argument("--topic", help="ntfy : réutiliser un sujet existant plutôt qu'en tirer un")
@@ -122,7 +124,7 @@ def _summary(outcome: pipeline.RunOutcome) -> str:
     for level, message in outcome.verdict.messages:
         lines.append(f"- {'🔴' if level == 'error' else '🟡'} {message}")
     news = [item for report in outcome.reports for item in report.new_releases]
-    if news:
+    if news and not outcome.protected:  # le résumé d'un run est public, la page ne l'est plus
         lines += ["", "### Nouveautés détectées", ""]
         for item in news[:30]:
             artists = ", ".join(artist.name for artist in item.artists)
@@ -172,7 +174,11 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
             f"Secrets absents : {', '.join(missing)} (voir README, ou .env.local)", file=sys.stderr
         )
         return 2
-    state = load_state(args.state_dir / "state.json") or State()
+    try:
+        state = load_state(args.state_dir / "state.json", protect.state_key(os.environ)) or State()
+    except ValueError as exc:
+        print(f"État illisible : {exc}", file=sys.stderr)
+        return 2
     now = datetime.now(UTC).replace(microsecond=0)
     cutoff = now.astimezone(ZoneInfo(config.timezone)).date() - timedelta(days=config.window_days)
     context = context_for(
@@ -201,6 +207,8 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
 
 def _cmd_auth(args: argparse.Namespace) -> int:
     env_file = Path(".env.local") if args.write_env else None
+    if args.source == "site":
+        return protect.setup(use_gh=not args.no_gh, repo=args.repo, env_file=env_file)
     if args.source == "ntfy":
         from newrel.notify import setup as setup_ntfy
 
@@ -225,6 +233,8 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     if not source.exists():
         print(f"{source} introuvable : affichage des données d'exemple (site/sample.json).")
         source = args.site / "sample.json"
+    elif protect.is_sealed(source):
+        print(f"{source} est chiffré : la page demandera son mot de passe.")
     site.build(args.site, args.out, source.read_text(encoding="utf-8"))
     site.serve(args.out, args.port)
     return 0

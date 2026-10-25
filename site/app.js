@@ -22,6 +22,7 @@ import {
   toggleHidden,
   toggleSeen,
 } from "./logic.js";
+import { deriveKey, isSealed, unseal } from "./vault.js";
 
 // Logos (Simple Icons, CC0) affichés avec chaque lien, conformément aux règles d'attribution.
 const ICONS = {
@@ -101,6 +102,85 @@ function writeSetting(key, value) {
   } catch {
     return false;
   }
+}
+
+// --- Page protégée par mot de passe --------------------------------------------------------------
+// releases.json arrive chiffré (voir vault.js). « Se souvenir de cet appareil » garde la clé dérivée
+// dans IndexedDB, et non le mot de passe : une clé non exportable ne peut pas être relue, seulement
+// utilisée par les pages de fragzel.github.io (qui partagent ce stockage).
+
+const KEY_DB = "newrel";
+const KEY_STORE = "keys";
+
+/** Opération sur la clé mémorisée ; null si le navigateur refuse IndexedDB (navigation privée…). */
+function keyStore(mode, operation) {
+  return new Promise((resolve) => {
+    try {
+      const opening = indexedDB.open(KEY_DB, 1);
+      opening.onupgradeneeded = () => opening.result.createObjectStore(KEY_STORE);
+      opening.onerror = () => resolve(null);
+      opening.onsuccess = () => {
+        const db = opening.result;
+        const transaction = db.transaction(KEY_STORE, mode);
+        const request = operation(transaction.objectStore(KEY_STORE));
+        const done = (value) => {
+          db.close();
+          resolve(value);
+        };
+        transaction.oncomplete = () => done(request.result ?? null);
+        transaction.onerror = () => done(null);
+        transaction.onabort = () => done(null);
+      };
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+const rememberKey = (kdf, key) =>
+  keyStore("readwrite", (store) => store.put({ salt: kdf.salt, iterations: kdf.iterations, key }, "site"));
+const forgetKey = () => keyStore("readwrite", (store) => store.delete("site"));
+
+async function rememberedKey(kdf) {
+  const entry = await keyStore("readonly", (store) => store.get("site"));
+  return entry?.salt === kdf.salt && entry.iterations === kdf.iterations ? entry.key : null;
+}
+
+/** Données en clair : avec la clé mémorisée, sinon une fois le bon mot de passe saisi. */
+async function unlock(envelope) {
+  const remembered = await rememberedKey(envelope.kdf);
+  if (remembered) {
+    try {
+      return await unseal(envelope, remembered);
+    } catch {
+      await forgetKey(); // mot de passe changé depuis : on le redemande
+    }
+  }
+  document.body.classList.add("locked");
+  const form = $("#unlock");
+  form.hidden = false;
+  $("#password").focus();
+  return new Promise((resolve) => {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = form.querySelector("button[type=submit]");
+      button.disabled = true;
+      $("#unlock-error").hidden = true;
+      try {
+        const key = await deriveKey($("#password").value, envelope.kdf);
+        const data = await unseal(envelope, key);
+        if ($("#remember").checked) await rememberKey(envelope.kdf, key);
+        form.hidden = true;
+        document.body.classList.remove("locked");
+        resolve(data);
+      } catch {
+        $("#unlock-error").hidden = false;
+        $("#password").select();
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
 }
 
 // --- En-tête -------------------------------------------------------------------------------------
@@ -560,6 +640,14 @@ async function main() {
     empty.hidden = false;
     empty.textContent = `Impossible de charger les données (${error.message}).`;
     return;
+  }
+  if (isSealed(page.data)) {
+    page.data = await unlock(page.data);
+    $("#lock-tools").hidden = false;
+    $("#lock").addEventListener("click", async () => {
+      await forgetKey();
+      location.reload();
+    });
   }
   // Deux sorties ont pu être fusionnées depuis la dernière visite : leurs marques suivent.
   page.marks = migrateMarks(loadMarks(), page.data.aliases);

@@ -6,6 +6,7 @@ rafraîchissement). La redirection arrive sur un petit serveur local en 127.0.0.
 
 from __future__ import annotations
 
+import html
 import http.server
 import secrets
 import time
@@ -48,7 +49,7 @@ def _wait_for_code(port: int, expected_state: str, url: str) -> str:
             text = (
                 "Autorisation reçue : tu peux fermer cet onglet et revenir au terminal."
                 if ok
-                else f"Autorisation refusée : {outcome.get('error')}."
+                else f"Autorisation refusée : {html.escape(outcome.get('error', ''))}."
             )
             body = _PAGE.format(text).encode()
             self.send_response(200 if ok else 400)

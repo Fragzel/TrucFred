@@ -4,6 +4,6 @@
   "type": "module",
   "description": "Uniquement pour les tests du front (node --test), aucune dépendance.",
   "scripts": {
-    "test": "node --test tests/js/logic.test.js"
+    "test": "node --test tests/js/logic.test.js tests/js/vault.test.js"
   }
 }

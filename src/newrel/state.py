@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 
-from newrel import dates
+from newrel import dates, protect
 from newrel.config import Config
 from newrel.models import ArtistState, LinkState, SourceItem, SourceState, State
 from newrel.sources.base import SourceContext, SourceResult
@@ -21,19 +21,26 @@ class ApplyStats:
     removed_artists: int = 0
 
 
-def load_state(path: Path) -> State | None:
-    """None si le fichier n'existe pas ; ValueError s'il est illisible."""
+def load_state(path: Path, key: bytes | None = None) -> State | None:
+    """None si le fichier n'existe pas ; ValueError s'il est illisible, ou chiffré sans la clé."""
     if not path.exists():
         return None
-    return State.model_validate_json(path.read_text(encoding="utf-8"))
+    text = path.read_text(encoding="utf-8")
+    if (sealed := protect.envelope(text)) is not None:
+        if key is None:
+            raise protect.CryptoError("fichier chiffré, secret STATE_KEY absent")
+        text = protect.unseal(sealed, key)
+    return State.model_validate_json(text)
 
 
-def save_state(state: State, path: Path) -> None:
+def save_state(state: State, path: Path, key: bytes | None = None) -> None:
+    """Chiffré avec STATE_KEY quand il est configuré : la branche data est publique."""
     state.sources = dict(sorted(state.sources.items()))
     state.artists = dict(sorted(state.artists.items()))
     state.links = dict(sorted(state.links.items()))
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(state.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    text = state.model_dump_json(indent=2) + "\n"
+    path.write_text(protect.seal(text, key) if key else text, encoding="utf-8")
 
 
 def context_for(

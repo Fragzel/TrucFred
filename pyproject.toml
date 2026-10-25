@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Agrégateur des nouvelles sorties des artistes suivis (Spotify, puis SoundCloud)"
 requires-python = ">=3.14"
 dependencies = [
+    "cryptography>=50.0.2",
     "httpx>=0.28.1",
     "pydantic>=2.14.1",
     "tzdata>=2026.5 ; sys_platform == 'win32'",

@@ -25,6 +25,7 @@ from newrel.sources.base import ArtistCheck, SourceContext, SourceResult, follow
 PLATFORM = "soundcloud"
 REQUIRED_ENV = ("SOUNDCLOUD_CLIENT_ID", "SOUNDCLOUD_CLIENT_SECRET", "SOUNDCLOUD_USER_URN")
 API_URL = "https://api.soundcloud.com"
+API_HOST = httpx.URL(API_URL).host
 TOKEN_URL = "https://secure.soundcloud.com/oauth/token"
 MAX_FOLLOWING_PAGES = 25  # 200 comptes par page
 
@@ -62,9 +63,14 @@ class SoundCloudApi:
         return {"Authorization": f"OAuth {self.token()}", "Accept": "application/json"}
 
     def get(self, path_or_url: str, params: dict[str, Any] | None = None) -> Any:
-        url = path_or_url if path_or_url.startswith("https://") else f"{API_URL}{path_or_url}"
-        response = self.http.request("GET", url, params=params, headers=self._headers())
-        ensure_ok(response, f"GET {httpx.URL(url).path}")
+        url = httpx.URL(
+            path_or_url if path_or_url.startswith("https://") else f"{API_URL}{path_or_url}"
+        )
+        if url.host != API_HOST:
+            # next_href et Location viennent des réponses : le jeton ne part que vers l'API.
+            raise HttpError(f"adresse hors de l'API SoundCloud refusée ({url.host})")
+        response = self.http.request("GET", str(url), params=params, headers=self._headers())
+        ensure_ok(response, f"GET {url.path}")
         return response.json()
 
     def collection(

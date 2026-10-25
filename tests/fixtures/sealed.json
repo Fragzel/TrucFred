@@ -1,0 +1,10 @@
+{
+  "format": "newrel-aes-gcm/1",
+  "kdf": {
+    "name": "PBKDF2-SHA256",
+    "iterations": 1000,
+    "salt": "gkbLqEzR8KKDuln9sbWBcA=="
+  },
+  "iv": "ysT+s9j10n5D5h6o",
+  "ciphertext": "ajIezudEeey8Ss7jm79S60e6T2ABfqaEgQ+1+RnuHvBnMcIPNdJTkVLj3JuT5bft4QzpPcxO7Of+tYpu"
+}

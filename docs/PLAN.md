@@ -8,7 +8,7 @@
 |---|---|
 | Plateformes | **Spotify + SoundCloud**. YouTube Music est retiré, puisque tu ne l'utilises pas ; son analyse reste au §1.2 au cas où. |
 | Abonnements payants | Spotify Premium ✔ (obligatoire pour l'API en Development Mode) · SoundCloud Artist Pro ✔ (obligatoire pour l'API) |
-| Visibilité | Repo **public**, données **en clair**. Le site est en `noindex` mais reste accessible à qui a l'URL. |
+| Visibilité | Repo **public**. Depuis le 25/10/2026, données **chiffrées** derrière un mot de passe déchiffré dans la page (voir le §3.1) ; le site reste en `noindex`. |
 | Fréquence | **1 run par jour** (vers 6 h 17, heure de Paris), plus un déclenchement manuel |
 | Historique affiché | **90 jours** glissants |
 | Contenus | Albums, EP, singles et nouveaux sons **publiés par les artistes eux-mêmes** : pas de featurings, de compilations ni de reposts |
@@ -346,6 +346,8 @@ Secrets et variables :
 | `SOUNDCLOUD_CLIENT_ID`, `SOUNDCLOUD_CLIENT_SECRET` | secret | Client Credentials |
 | `NEWREL_SECRETS_PAT` | secret (optionnel) | PAT fine-grained (Secrets : write, ce dépôt seulement), utile seulement si Spotify fait tourner le refresh token |
 | `NTFY_TOPIC` | secret | notifications, à l'étape 3 |
+| `SITE_PASSWORD` | secret | mot de passe de la page : chiffre `releases.json` (§3.1) |
+| `STATE_KEY` | secret | clé aléatoire de `state.json`, indépendante du mot de passe ; ne change jamais |
 
 - GitHub masque les secrets, mais pas les valeurs qui en dérivent. Le script émet donc `::add-mask::` pour chaque access token et pour l'en-tête Basic, avant tout log.
 - Les logs d'un repo public sont publics : jamais d'en-têtes ni de tokens dans les logs.
@@ -367,13 +369,17 @@ Secrets et variables :
 
 ## 3. Points de vigilance
 
-### 3.1 Confidentialité (choix retenu : public, en clair)
+### 3.1 Confidentialité (choix révisé le 25/10/2026 : public, données chiffrées)
 
-- Sont lisibles par n'importe qui : la liste de tes artistes (dans `releases.json` et sur la branche `data`), le code et les logs Actions. Le `noindex` limite l'indexation, pas l'accès.
-- Un repo privé avec GitHub Pro ne changerait rien pour le site : il resterait public. Seul GitHub Enterprise Cloud permet un site Pages privé.
-- Si tu changes d'avis :
-  - on chiffre `state.json` et `releases.json` en AES-GCM, avec une phrase de passe en secret, et la page déchiffre via WebCrypto ;
-  - comme la branche `data` est réécrite sans historique, cette bascule restera possible plus tard.
+- Un repo privé avec GitHub Pro ne changerait rien pour le site : il resterait public. Seul GitHub Enterprise Cloud permet un site Pages privé. Un vrai login (dépôt privé et Cloudflare Access) a été écarté : nouveau compte et nouvelle URL pour un gain faible sur des données peu sensibles.
+- Choix retenu : chiffrement des données publiées (`src/newrel/protect.py`, `site/vault.js`) :
+  - `releases.json` en AES-256-GCM, clé dérivée du mot de passe `SITE_PASSWORD` (PBKDF2-SHA256, 600 000 itérations), déchiffré par WebCrypto ;
+  - le sel est repris d'un run à l'autre, pour que la clé mémorisée par le navigateur (IndexedDB, non exportable) reste valable ;
+  - `state.json` chiffré avec `STATE_KEY`, une clé aléatoire : changer de mot de passe ne fait pas perdre l'état ;
+  - le résumé public des runs ne cite plus de titres ;
+  - si `SITE_PASSWORD` disparaît alors que la page était chiffrée, le run s'arrête au lieu de republier en clair.
+- Restent publics : le code, les compteurs des logs et la taille des données. Sans serveur, les essais de mot de passe hors ligne ne sont pas limités, d'où un mot de passe tiré au hasard (environ 94 bits).
+- Le stockage du navigateur est partagé par tous les sites `fragzel.github.io` (Puzzles compris) : ils pourraient utiliser la clé mémorisée et lire le token GitHub du lancement manuel. Puzzles ne charge que ses propres scripts.
 
 ### 3.2 Tokens : expiration et renouvellement
 

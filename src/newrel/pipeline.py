@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from newrel import notify, site
+from newrel import notify, protect, site
 from newrel import releases as releases_file
 from newrel.config import Aliases, Config
 from newrel.http import HttpError
@@ -48,6 +48,8 @@ class RunOutcome:
     state_written: bool
     reports: list[SourceReport] = field(default_factory=list)
     notified: int = 0
+    protected: bool = False
+    """Page chiffrée : le résumé public du run ne doit pas citer de titres."""
 
 
 def run(
@@ -67,10 +69,19 @@ def run(
     sources = SOURCES if sources is None else sources
     cutoff = now.astimezone(ZoneInfo(config.timezone)).date() - timedelta(days=config.window_days)
     state_path = state_dir / "state.json"
+    releases_path = state_dir / "releases.json"
     try:
-        previous = load_state(state_path)
+        state_key = protect.state_key(env)
+        previous = load_state(state_path, state_key)
     except ValueError as exc:  # ValidationError de pydantic hérite de ValueError
         raise FatalError(f"{state_path} illisible, rien n'a été écrit : {exc}") from exc
+    password = env.get("SITE_PASSWORD", "")
+    if not password and protect.is_sealed(releases_path):
+        # Mieux vaut un run rouge qu'une page protégée republiée en clair.
+        raise FatalError(
+            "la page est protégée mais le secret SITE_PASSWORD est absent :"
+            " rien n'a été écrit ni publié"
+        )
     state = previous or State()
     configured = {
         name: spec
@@ -89,6 +100,12 @@ def run(
                 verdict.add(
                     "warning", f"{label} non configuré (secrets absents : {', '.join(missing)})"
                 )
+        if password and state_key is None:
+            verdict.add(
+                "warning",
+                "page protégée, mais l'état reste en clair sur la branche data (secret STATE_KEY"
+                " absent : uv run newrel auth site)",
+            )
         if configured and previous is None:
             # Sans état, le catalogue part en historique (backfill) : aucune fausse nouveauté.
             verdict.add(
@@ -143,9 +160,11 @@ def run(
         repository=env.get("GITHUB_REPOSITORY"),
     )
     payload = data.model_dump_json(indent=2) + "\n"
+    if password:
+        payload = protect.seal_releases(payload, password, previous=releases_path)
     if state_written:
-        save_state(state, state_path)
-        (state_dir / "releases.json").write_text(payload, encoding="utf-8")
+        save_state(state, state_path, state_key)
+        releases_path.write_text(payload, encoding="utf-8")
     site.build(site_dir, out_dir, payload)
     notified = 0
     wanted = not offline and bool(env.get("NTFY_TOPIC"))
@@ -171,6 +190,7 @@ def run(
         state_written=state_written,
         reports=reports,
         notified=notified,
+        protected=bool(password),
     )
 
 

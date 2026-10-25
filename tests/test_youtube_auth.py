@@ -50,7 +50,10 @@ def test_cle_refusee(router, monkeypatch, tmp_path, capsys) -> None:
     router.get(f"{API_URL}/channels").mock(return_value=httpx.Response(400, json=refusal))
     status = youtube_auth.setup(profile="@fred", use_gh=False, env_file=tmp_path / ".env.local")
     out = capsys.readouterr().out
-    assert status == 1 and "API_KEY_INVALID" in out and "mauvaise-cle" not in out
+    assert status == 1 and "API_KEY_INVALID" in out
+    # Sous GitHub Actions, « ::add-mask:: » demande justement de masquer la clé dans les logs.
+    shown = [line for line in out.splitlines() if not line.startswith("::add-mask::")]
+    assert not any("mauvaise-cle" in line for line in shown)
 
 
 def test_chaine_sans_abonnement_visible_rien_d_enregistre(

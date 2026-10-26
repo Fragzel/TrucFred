@@ -53,8 +53,8 @@ max_retry_after_seconds = 120
 
 [notify]
 # Notification ntfy.sh après un run qui trouve des nouveautés (« uv run newrel auth ntfy »).
-# Les comptes masqués sur la page ne sont pas connus ici : exclus-les dans [soundcloud] exclude,
-# ou dans ignore de youtube.toml.
+# Les sorties masquées sur la page ne sont pas connues ici : pour ne plus être notifié d'un compte,
+# exclus-le dans [soundcloud] exclude, ou dans ignore de youtube.toml.
 site_url = "https://fragzel.github.io/TrucFred/"   # ouvert au clic sur la notification
 types = ["album", "ep", "single", "track", "video"] # retire "track" ou "video" pour les ignorer
 max_items = 10

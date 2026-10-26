@@ -113,7 +113,7 @@ de promo.
 - **Labels et chaînes de promo** : une chaîne qui publie des titres de plusieurs artistes est
   suivie comme un artiste, puisque leurs sorties comptent aussi. `uv run newrel triage youtube`
   en affiche la liste à part, avec les @handles : une chaîne trop prolifique s'écarte dans
-  `ignore` de `youtube.toml`, ou se masque sur la page.
+  `ignore` de `youtube.toml`.
   - Leurs vidéos gardent leur titre complet (« Artiste - Morceau ») et sont attribuées à la
     chaîne : elles ne fusionnent pas avec la même sortie publiée sur Spotify par l'artiste.
 - **Chaînes douteuses** : elles ne sont pas suivies. Le run affiche « N chaîne(s) à trier » ;
@@ -151,12 +151,15 @@ l'étoile renvoie la sortie là où elle était : « Déjà vus » si elle avait
 - **Favoris** : l'étoile d'une carte l'ajoute aux favoris. Un favori garde une copie de la
   sortie, il reste donc visible même après sa sortie de la fenêtre de 90 jours (badge
   « Archive »).
-- **Masquer un compte** : le lien « Masquer » d'une carte cache toutes les sorties dont ce
-  compte est l'artiste principal, utile pour un label trop prolifique. Les favoris restent
-  visibles. La liste « Comptes masqués » en bas de page permet de les réafficher.
+- **Masquer une sortie** : le lien « Masquer » d'une carte cache cette sortie seulement, des
+  onglets « À découvrir » et « Déjà vus » ; les autres titres de l'artiste restent. Un favori
+  n'a pas ce lien. La liste « Sorties masquées » en bas de page permet de les réafficher.
+  - Jusqu'au 26/10, « Masquer » cachait tout un compte : ceux masqués ainsi le restent, et se
+    réaffichent depuis la même liste.
   - Le masquage ne concerne que la page.
   - Pour ne plus du tout collecter un compte, ni recevoir de notification à son sujet,
-    ajoute-le dans `exclude`, section `[soundcloud]` de `config.toml`.
+    ajoute-le dans `exclude`, section `[soundcloud]` de `config.toml`, ou dans `ignore` de
+    `youtube.toml`.
 - **Stockage** : les marques sont enregistrées dans le navigateur (localStorage). Elles ne sont
   pas synchronisées entre appareils, faute de serveur. Pour les transférer, utilise
   « Exporter » puis « Importer » en bas de page. L'import fusionne sans rien effacer.
@@ -180,8 +183,8 @@ la page.
   - seulement les sorties apparues pendant le run, hors catalogue ;
   - une sortie déjà vue sur une autre plateforme ne l'est pas une deuxième fois ;
   - `types` dans `[notify]` permet par exemple de ne garder que les albums, EP et singles.
-- **Comptes masqués** : ceux masqués sur la page ne sont pas connus du serveur. Exclus-les dans
-  `config.toml` si tu ne veux plus en entendre parler.
+- **Sorties masquées** : le serveur ne les connaît pas. Pour ne plus entendre parler d'un compte,
+  exclus-le dans `config.toml` ou `youtube.toml`.
 - **En cas d'échec** : une notification ratée ne fait pas échouer le run, elle laisse seulement
   un avertissement.
 

@@ -9,6 +9,7 @@ import {
   formatHash,
   groupByWeek,
   hiddenAccounts,
+  hiddenReleases,
   isNew,
   lateSources,
   localDay,
@@ -26,6 +27,7 @@ import {
   tabOf,
   toggleFavorite,
   toggleHidden,
+  toggleHiddenRelease,
   toggleSeen,
   zonedInstant,
 } from "../../site/logic.js";
@@ -200,7 +202,25 @@ test("chaque sortie n'apparaît que dans un seul onglet, le favori l'emporte", (
   assert.deepEqual([ids("todo"), ids("seen"), ids("fav")], [["c"], ["a", "b"], []]);
 });
 
-test("compte masqué : retiré des onglets sauf des favoris, et réaffichable", () => {
+test("sortie masquée : elle seule quitte les onglets, les autres titres de l'artiste restent", () => {
+  const artist = [{ id: "a_1", name: "Polyphia" }];
+  const releases = ["a", "b", "c"].map((id) => release({ id, title: `Titre ${id}`, artists: artist }));
+  let marks = toggleSeen(toggleHiddenRelease(emptyMarks(), releases[0], NOW), "b", NOW);
+  marks = toggleHiddenRelease(marks, releases[1], NOW); // vue, puis masquée
+  const ids = (tab) => releasesForTab(releases, marks, tab).map((r) => r.id);
+  assert.deepEqual([ids("todo"), ids("seen")], [["c"], []]);
+  assert.deepEqual(tabCounts(releases, marks), { todo: 1, seen: 0, fav: 0 });
+  assert.deepEqual(
+    hiddenReleases(releases, marks).map((r) => [r.id, r.title, r.artist]),
+    [["a", "Titre a", "Polyphia"], ["b", "Titre b", "Polyphia"]],
+  );
+  assert.deepEqual(releasesShown(releases, marks, "todo", new Set(["a"])).map((r) => r.id), ["c", "a"]);
+  marks = toggleHiddenRelease(marks, { id: "a" }, NOW); // « Réafficher » en bas de page
+  assert.deepEqual(ids("todo"), ["a", "c"]);
+  assert.deepEqual(hiddenReleases([], marks), []); // sortie de la fenêtre : plus listée
+});
+
+test("compte masqué avant le 26/10 : retiré des onglets sauf des favoris, et réaffichable", () => {
   const label = { id: "a_label", name: "Exode Records" };
   const releases = [
     release({ id: "l1", artists: [label] }),
@@ -250,10 +270,12 @@ test("marques : lecture tolérante, fusion de sorties et import", () => {
   assert.deepEqual(parseMarks("{abîmé"), emptyMarks());
   assert.deepEqual(parseMarks(null), emptyMarks());
   assert.deepEqual(parseMarks('{"version": 2, "seen": {}, "fav": {}}'), emptyMarks());
-  const marks = toggleSeen(emptyMarks(), "r_ancien", NOW);
-  assert.deepEqual(Object.keys(migrateMarks(marks, { r_ancien: "r_nouveau" }).seen), ["r_nouveau"]);
-  const merged = mergeMarks(toggleSeen(emptyMarks(), "a", NOW), toggleSeen(emptyMarks(), "b", NOW));
-  assert.deepEqual(Object.keys(merged.seen).sort(), ["a", "b"]);
+  const marks = toggleHiddenRelease(toggleSeen(emptyMarks(), "r_ancien", NOW), release({ id: "r_ancien" }), NOW);
+  const migrated = migrateMarks(marks, { r_ancien: "r_nouveau" });
+  assert.deepEqual([Object.keys(migrated.seen), Object.keys(migrated.hiddenReleases)], [["r_nouveau"], ["r_nouveau"]]);
+  const merged = mergeMarks(toggleSeen(emptyMarks(), "a", NOW), toggleHiddenRelease(emptyMarks(), release({ id: "b" }), NOW));
+  assert.deepEqual([Object.keys(merged.seen), Object.keys(merged.hiddenReleases)], [["a"], ["b"]]);
+  assert.deepEqual(parseMarks('{"version": 1, "seen": {}, "fav": {}, "hidden": {}}').hiddenReleases, {}); // avant le 26/10
 });
 
 test("bannières : données périmées et source en difficulté", () => {

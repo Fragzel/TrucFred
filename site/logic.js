@@ -211,14 +211,16 @@ export function formatHash(filters) {
   return text ? `#${text}` : "";
 }
 
-// --- Marques « déjà vu » et favoris -------------------------------------------------------------
+// --- Marques « déjà vu », favoris et sorties masquées --------------------------------------------
 // Gardées dans le navigateur (localStorage) : propres à un navigateur, transférables par
 // export/import. Un favori garde une copie de la sortie pour survivre à la fenêtre de 90 jours.
+// `hidden` : comptes masqués avant le 26/10, quand « Masquer » cachait tout un artiste ; ils
+// restent masqués jusqu'à ce qu'on les réaffiche. Depuis, « Masquer » ne cache que la sortie.
 
 export const TABS = ["todo", "seen", "fav"];
 
 export function emptyMarks() {
-  return { version: 1, seen: {}, fav: {}, hidden: {} };
+  return { version: 1, seen: {}, fav: {}, hidden: {}, hiddenReleases: {} };
 }
 
 /** Marques lues depuis le stockage ; un contenu absent ou abîmé donne des marques vides. */
@@ -228,7 +230,8 @@ export function parseMarks(text) {
     const isMap = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
     if (data?.version === 1 && isMap(data.seen) && isMap(data.fav)) {
       const hidden = isMap(data.hidden) ? { ...data.hidden } : {}; // absent avant le 22/10
-      return { version: 1, seen: { ...data.seen }, fav: { ...data.fav }, hidden };
+      const hiddenReleases = isMap(data.hiddenReleases) ? { ...data.hiddenReleases } : {}; // avant le 26/10
+      return { version: 1, seen: { ...data.seen }, fav: { ...data.fav }, hidden, hiddenReleases };
     }
   } catch {
     // contenu illisible : on repart de zéro plutôt que de bloquer la page
@@ -240,7 +243,12 @@ export function parseMarks(text) {
 export function migrateMarks(marks, aliases) {
   const move = (bucket) =>
     Object.fromEntries(Object.entries(bucket).map(([id, value]) => [aliases?.[id] ?? id, value]));
-  return { ...marks, seen: move(marks.seen), fav: move(marks.fav) };
+  return {
+    ...marks,
+    seen: move(marks.seen),
+    fav: move(marks.fav),
+    hiddenReleases: move(marks.hiddenReleases),
+  };
 }
 
 /** Fusionne des marques importées avec les marques existantes (rien n'est retiré). */
@@ -250,13 +258,38 @@ export function mergeMarks(current, imported) {
     seen: { ...imported.seen, ...current.seen },
     fav: { ...imported.fav, ...current.fav },
     hidden: { ...imported.hidden, ...current.hidden },
+    hiddenReleases: { ...imported.hiddenReleases, ...current.hiddenReleases },
   };
 }
 
-/** Compte masqué : on regarde l'artiste principal (l'uploader pour un son SoundCloud). */
+/** Compte masqué avant le 26/10 : on regarde l'artiste principal (l'uploader pour un son SoundCloud). */
 export function hiddenAccount(release, marks) {
   const main = release.artists[0];
   return Boolean(main && marks.hidden[main.id]);
+}
+
+/** Sortie masquée, elle seule ou avec tout son compte (masquage d'avant le 26/10). */
+export function isHidden(release, marks) {
+  return Boolean(marks.hiddenReleases[release.id]) || hiddenAccount(release, marks);
+}
+
+export function toggleHiddenRelease(marks, release, now) {
+  const hiddenReleases = { ...marks.hiddenReleases };
+  if (hiddenReleases[release.id]) delete hiddenReleases[release.id];
+  else {
+    const artist = release.artists?.[0]?.name ?? "";
+    hiddenReleases[release.id] = { at: now.toISOString(), title: release.title, artist };
+  }
+  return { ...marks, hiddenReleases };
+}
+
+/** Sorties masquées encore dans la fenêtre, la dernière masquée d'abord. */
+export function hiddenReleases(releases, marks) {
+  const current = new Set(releases.map((release) => release.id));
+  return Object.entries(marks.hiddenReleases)
+    .filter(([id]) => current.has(id))
+    .map(([id, entry]) => ({ id, ...entry }))
+    .sort((a, b) => b.at.localeCompare(a.at));
 }
 
 export function toggleHidden(marks, artist, now) {
@@ -303,7 +336,7 @@ export function tabOf(id, marks) {
 }
 
 /** Sorties d'un onglet. Les favoris sortis de la fenêtre reviennent depuis leur copie.
- * Les comptes masqués disparaissent de « À découvrir » et « Déjà vus », pas des favoris. */
+ * Les sorties masquées disparaissent de « À découvrir » et « Déjà vus », pas des favoris. */
 export function releasesForTab(releases, marks, tab) {
   if (tab === "fav") {
     const current = new Map(releases.map((release) => [release.id, release]));
@@ -311,11 +344,11 @@ export function releasesForTab(releases, marks, tab) {
       ([id, entry]) => current.get(id) ?? { ...entry.release, id, archived: true },
     );
   }
-  return releases.filter((release) => tabOf(release.id, marks) === tab && !hiddenAccount(release, marks));
+  return releases.filter((release) => tabOf(release.id, marks) === tab && !isHidden(release, marks));
 }
 
-/** Sorties affichées dans un onglet : les siennes, plus celles qu'on vient d'en ranger ailleurs
- * (`kept`). Elles restent à leur place jusqu'au prochain changement d'onglet ou de filtre : sinon la
+/** Sorties affichées dans un onglet : les siennes, plus celles qu'on vient d'en ranger ailleurs ou
+ * de masquer (`kept`). Elles restent à leur place jusqu'au prochain changement d'onglet ou de filtre : sinon la
  * carte voisine, souvent du même artiste, glisse sous le pointeur et un second clic la range aussi. */
 export function releasesShown(releases, marks, tab, kept) {
   const own = releasesForTab(releases, marks, tab);
@@ -333,7 +366,7 @@ export function tabCounts(releases, marks) {
   const counts = { todo: 0, seen: 0, fav: Object.keys(marks.fav).length };
   for (const release of releases) {
     const tab = tabOf(release.id, marks);
-    if (tab !== "fav" && !hiddenAccount(release, marks)) counts[tab] += 1;
+    if (tab !== "fav" && !isHidden(release, marks)) counts[tab] += 1;
   }
   return counts;
 }

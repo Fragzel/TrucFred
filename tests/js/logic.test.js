@@ -20,6 +20,7 @@ import {
   parseMarks,
   releaseWeek,
   releasesForTab,
+  releasesShown,
   styleCounts,
   tabCounts,
   tabOf,
@@ -89,6 +90,10 @@ test("regroupement par semaine, la plus récente d'abord", () => {
       ["2026-10-09", ["a"]],
     ],
   );
+  // Même jour, même détection : l'identifiant décide, quel que soit l'ordre reçu.
+  const sameDay = ["r_1", "r_3", "r_2"].map((id) => release({ id }));
+  assert.deepEqual(groupByWeek(sameDay)[0].releases.map((r) => r.id), ["r_3", "r_2", "r_1"]);
+  assert.deepEqual(groupByWeek(sameDay.reverse())[0].releases.map((r) => r.id), ["r_3", "r_2", "r_1"]);
 });
 
 test("onglet et filtres ⇄ hash d'URL", () => {
@@ -151,6 +156,19 @@ test("déjà vu : la sortie change d'onglet, et revient si on décoche", () => {
   assert.deepEqual(tabCounts(releases, marks), { todo: 1, seen: 1, fav: 0 });
   marks = toggleSeen(marks, "a", NOW);
   assert.deepEqual(tabCounts(releases, marks), { todo: 2, seen: 0, fav: 0 });
+});
+
+test("une sortie rangée ailleurs reste à sa place jusqu'au changement d'onglet", () => {
+  const artist = [{ id: "a_1", name: "Polyphia" }];
+  const releases = ["a", "b", "c"].map((id) => release({ id, artists: artist }));
+  const marks = toggleSeen(emptyMarks(), "a", NOW);
+  const shown = (tab, kept) => releasesShown(releases, marks, tab, new Set(kept)).map((r) => r.id);
+  assert.deepEqual(shown("todo", ["a"]), ["b", "c", "a"]); // la voisine ne prend pas sa place
+  assert.deepEqual(shown("todo", []), ["b", "c"]);
+  assert.deepEqual(shown("seen", ["a"]), ["a"]); // déjà dans l'onglet : pas en double
+  const hidden = toggleHidden(marks, artist[0], NOW);
+  assert.deepEqual(releasesShown(releases, hidden, "todo", new Set(["a"])), []); // compte masqué
+  assert.deepEqual(tabCounts(releases, marks), { todo: 2, seen: 1, fav: 0 }); // compteurs exacts
 });
 
 test("tout marquer : un lot partiellement vu devient entièrement vu", () => {

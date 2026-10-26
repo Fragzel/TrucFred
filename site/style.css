@@ -353,6 +353,11 @@ h1 {
   border-color: var(--new);
 }
 
+/* Rangée ailleurs à l'instant : reste à sa place, estompée, jusqu'au prochain onglet ou filtre. */
+.card.is-moved {
+  opacity: 0.5;
+}
+
 .cover {
   display: block;
   aspect-ratio: 1;

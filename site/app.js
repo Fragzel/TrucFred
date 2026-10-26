@@ -20,6 +20,7 @@ import {
   parseHash,
   parseMarks,
   releasesForTab,
+  releasesShown,
   styleCounts,
   tabCounts,
   tabOf,
@@ -68,7 +69,14 @@ const monthFormat = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "num
 const weekFormat = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 const stampFormat = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeStyle: "short" });
 
-const page = { data: null, filters: parseHash(location.hash), now: new Date(), marks: emptyMarks(), visible: [] };
+const page = {
+  data: null,
+  filters: parseHash(location.hash),
+  now: new Date(),
+  marks: emptyMarks(),
+  visible: [],
+  kept: new Set(), // sorties rangées ailleurs, gardées à leur place jusqu'au prochain onglet ou filtre
+};
 const $ = (selector) => document.querySelector(selector);
 
 const safeUrl = (url) => (/^https:\/\//.test(url ?? "") ? url : "#");
@@ -434,9 +442,10 @@ function updateHash() {
 
 // --- Cartes et liste -----------------------------------------------------------------------------
 
-function card(release, fresh) {
+function card(release, fresh, moved) {
   const node = $("#tpl-card").content.firstElementChild.cloneNode(true);
   node.dataset.id = release.id;
+  node.classList.toggle("is-moved", moved);
   const coverLink = release.cover && release.links.find((link) => link.platform === release.cover.platform);
   const cover = node.querySelector(".cover");
   cover.href = safeUrl((coverLink ?? release.links[0]).url);
@@ -515,29 +524,38 @@ function renderTabs() {
 function render() {
   const { releases, rules, timezone } = page.data;
   const fresh = (release) => isNew(release, page.now, rules, timezone);
-  const pool = releasesForTab(releases, page.marks, page.filters.tab);
+  const { tab } = page.filters;
+  const pool = releasesForTab(releases, page.marks, tab);
   page.visible = pool.filter((release) => matches(release, page.filters, fresh));
+  const own = new Set(page.visible.map((release) => release.id));
+  const shown = releasesShown(releases, page.marks, tab, page.kept).filter((release) =>
+    matches(release, page.filters, fresh),
+  );
   renderStyleMenu(pool.filter((release) => matches(release, { ...page.filters, style: null }, fresh)));
   renderTabs();
   const fragment = document.createDocumentFragment();
-  for (const { week, releases: items } of groupByWeek(page.visible)) {
+  for (const { week, releases: items } of groupByWeek(shown)) {
     const section = $("#tpl-week").content.firstElementChild.cloneNode(true);
     section.querySelector("h2").textContent = `Semaine du vendredi ${weekFormat.format(dayToUtc(week))}`;
     section.querySelector(".count").textContent = plural(items.length, "sortie");
-    section.querySelector(".grid").append(...items.map((release) => card(release, fresh(release))));
+    const cards = items.map((release) => card(release, fresh(release), !own.has(release.id)));
+    section.querySelector(".grid").append(...cards);
     fragment.append(section);
   }
   $("#list").replaceChildren(fragment);
   const empty = $("#empty");
-  empty.hidden = page.visible.length > 0;
+  empty.hidden = shown.length > 0;
   if (!releases.length && page.filters.tab !== "fav") {
     empty.textContent = "Pas encore de sorties : la première collecte n'a pas eu lieu.";
   } else {
     empty.textContent = pool.length ? "Aucune sortie ne correspond à ces filtres." : EMPTY_TAB[page.filters.tab];
   }
   const markAll = $("#mark-all");
-  markAll.hidden = page.filters.tab !== "todo" || page.visible.length < 2;
-  markAll.textContent = `Tout marquer comme vu (${page.visible.length})`;
+  markAll.hidden = tab === "fav" || page.visible.length < 2;
+  markAll.textContent =
+    tab === "seen"
+      ? `Tout remettre dans « À découvrir » (${page.visible.length})`
+      : `Tout marquer comme vu (${page.visible.length})`;
   renderHidden();
 }
 
@@ -603,7 +621,8 @@ function findRelease(id) {
 
 function onCardClick(event) {
   const button = event.target.closest(".mark-seen, .mark-fav, .mark-hide");
-  if (!button) return;
+  // Second clic d'un double-clic : il annulerait le premier.
+  if (!button || event.detail > 1) return;
   const release = findRelease(button.closest(".card").dataset.id);
   if (!release) return;
   if (button.classList.contains("mark-hide")) {
@@ -618,18 +637,27 @@ function onCardClick(event) {
     const message = marks.fav[release.id]
       ? `« ${release.title} » rangé dans « Favoris ».`
       : `« ${release.title} » retiré des favoris${archived ? "" : `, de retour dans ${destination}`}.`;
+    page.kept.add(release.id);
     applyMarks(marks, message);
     return;
   }
   const seen = Boolean(page.marks.seen[release.id]);
   const message = seen ? `« ${release.title} » remis dans « À découvrir ».` : `« ${release.title} » rangé dans « Déjà vus ».`;
+  page.kept.add(release.id);
   applyMarks(toggleSeen(page.marks, release.id, new Date()), message);
 }
 
+/** « Tout marquer comme vu » dans « À découvrir », « Tout remettre » dans « Déjà vus ». */
 function onMarkAll() {
   const ids = page.visible.map((release) => release.id);
-  if (!ids.length || !confirm(`Ranger les ${ids.length} sorties affichées dans « Déjà vus » ?`)) return;
-  applyMarks(toggleSeen(page.marks, ids, new Date()), `${plural(ids.length, "sortie")} rangée${ids.length > 1 ? "s" : ""} dans « Déjà vus ».`);
+  const restore = page.filters.tab === "seen";
+  const question = restore
+    ? `Remettre les ${ids.length} sorties affichées dans « À découvrir » ?`
+    : `Ranger les ${ids.length} sorties affichées dans « Déjà vus » ?`;
+  if (!ids.length || !confirm(question)) return;
+  const s = ids.length > 1 ? "s" : "";
+  const done = restore ? `remise${s} dans « À découvrir »` : `rangée${s} dans « Déjà vus »`;
+  applyMarks(toggleSeen(page.marks, ids, new Date()), `${plural(ids.length, "sortie")} ${done}.`);
 }
 
 function onExport() {
@@ -657,6 +685,7 @@ async function onImport(event) {
 }
 
 function selectTab(tab) {
+  page.kept.clear();
   page.filters = { ...page.filters, tab };
   updateHash();
   render();
@@ -704,6 +733,7 @@ async function main() {
   $("#filters").addEventListener("input", (event) => {
     clearTimeout(timer);
     timer = setTimeout(() => {
+      page.kept.clear();
       page.filters = readFilters();
       updateHash();
       render();
@@ -711,6 +741,7 @@ async function main() {
   });
   $("#filters").addEventListener("submit", (event) => event.preventDefault());
   $("#reset").addEventListener("click", () => {
+    page.kept.clear();
     page.filters = { ...parseHash(""), tab: page.filters.tab };
     updateHash();
     renderFilters();
@@ -738,6 +769,7 @@ async function main() {
   $("#export").addEventListener("click", onExport);
   $("#import").addEventListener("change", onImport);
   window.addEventListener("hashchange", () => {
+    page.kept.clear();
     page.filters = parseHash(location.hash);
     renderFilters();
     render();

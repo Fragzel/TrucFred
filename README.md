@@ -143,6 +143,11 @@ l'étoile renvoie la sortie là où elle était : « Déjà vus » si elle avait
 - **Ranger une sortie** : le bouton « Déjà vu » d'une carte la déplace dans « Déjà vus ».
   Recliquer dessus la remet dans « À découvrir ». « Tout marquer comme vu » range d'un coup
   toutes les sorties affichées, et chaque action peut être annulée pendant quelques secondes.
+  - La carte rangée (ou étoilée) reste à sa place, estompée, jusqu'au prochain changement
+    d'onglet ou de filtre. Sinon la voisine, souvent du même artiste, glisserait sous le pointeur
+    et un second clic la rangerait aussi. Le second clic d'un double-clic est ignoré.
+  - Dans « Déjà vus », « Tout remettre dans À découvrir » fait l'inverse sur les sorties
+    affichées : avec la recherche, on remet d'un coup tous les titres d'un artiste.
 - **Favoris** : l'étoile d'une carte l'ajoute aux favoris. Un favori garde une copie de la
   sortie, il reste donc visible même après sa sortie de la fenêtre de 90 jours (badge
   « Archive »).

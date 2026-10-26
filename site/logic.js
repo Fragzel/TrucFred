@@ -165,10 +165,14 @@ export function styleCounts(releases) {
   return counts;
 }
 
-/** Regroupe par semaine de sortie, la plus récente d'abord. */
+/** Regroupe par semaine de sortie, la plus récente d'abord. L'identifiant départage les sorties du
+ * même jour, comme dans releases.json : une carte ne change pas de place d'un affichage à l'autre. */
 export function groupByWeek(releases) {
   const sorted = [...releases].sort(
-    (a, b) => b.sort_date.localeCompare(a.sort_date) || b.first_seen.localeCompare(a.first_seen),
+    (a, b) =>
+      b.sort_date.localeCompare(a.sort_date) ||
+      b.first_seen.localeCompare(a.first_seen) ||
+      b.id.localeCompare(a.id),
   );
   const weeks = [];
   for (const release of sorted) {
@@ -308,6 +312,21 @@ export function releasesForTab(releases, marks, tab) {
     );
   }
   return releases.filter((release) => tabOf(release.id, marks) === tab && !hiddenAccount(release, marks));
+}
+
+/** Sorties affichées dans un onglet : les siennes, plus celles qu'on vient d'en ranger ailleurs
+ * (`kept`). Elles restent à leur place jusqu'au prochain changement d'onglet ou de filtre : sinon la
+ * carte voisine, souvent du même artiste, glisse sous le pointeur et un second clic la range aussi. */
+export function releasesShown(releases, marks, tab, kept) {
+  const own = releasesForTab(releases, marks, tab);
+  const ids = new Set(own.map((release) => release.id));
+  const known = new Map(releasesForTab(releases, marks, "fav").map((release) => [release.id, release]));
+  for (const release of releases) known.set(release.id, release);
+  const moved = [...kept]
+    .filter((id) => !ids.has(id) && known.has(id))
+    .map((id) => known.get(id))
+    .filter((release) => tab === "fav" || !hiddenAccount(release, marks));
+  return [...own, ...moved];
 }
 
 export function tabCounts(releases, marks) {

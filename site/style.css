@@ -1021,7 +1021,7 @@ h1 {
   display: none;
 }
 
-/* Boutons de tri du lecteur : les mêmes dans le bandeau et en plein écran. */
+/* Boutons de tri du lecteur : les mêmes dans le bandeau et dans le lecteur agrandi. */
 .player-marks {
   display: flex;
   flex-wrap: wrap;
@@ -1047,18 +1047,20 @@ h1 {
   display: none;
 }
 
-/* --- Lecteur agrandi : la sortie en cours en plein écran, pour trier une par une --- */
-
-.is-focus {
-  overflow: hidden;
-}
+/* --- Lecteur agrandi : un panneau sur la moitié basse de l'écran, pour trier une par une --- */
 
 .focus {
   position: fixed;
-  inset: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 30;
+  max-height: 50vh;
   overflow-y: auto;
-  background: var(--bg);
+  border-top: 1px solid var(--line);
+  border-radius: 16px 16px 0 0;
+  background: var(--surface);
+  box-shadow: 0 -8px 30px rgb(0 0 0 / 30%);
 }
 
 .focus[hidden] {
@@ -1066,13 +1068,11 @@ h1 {
 }
 
 .focus-inner {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  min-height: 100%;
+  display: grid;
+  gap: 0.75rem;
   max-width: 1100px;
   margin: 0 auto;
-  padding: 1rem 1rem 1.5rem;
+  padding: 0.75rem 1rem 1rem;
 }
 
 .focus-top {
@@ -1084,15 +1084,14 @@ h1 {
 .focus-count {
   margin: 0;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .focus-body {
   display: grid;
-  flex: 1;
-  grid-template-columns: minmax(200px, min(42vh, 420px)) 1fr;
+  grid-template-columns: min(24vh, 210px) 1fr;
   align-items: start;
-  gap: 1.5rem 2rem;
+  gap: 1rem 1.5rem;
 }
 
 .focus-art {
@@ -1101,7 +1100,7 @@ h1 {
   overflow: hidden;
   border-radius: var(--radius);
   background: var(--line);
-  box-shadow: 0 8px 30px rgb(0 0 0 / 30%);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
 }
 
 .focus-cover {
@@ -1123,13 +1122,13 @@ h1 {
   height: 100%;
   place-items: center;
   color: var(--muted);
-  font-size: 5rem;
+  font-size: 4rem;
   font-weight: 700;
 }
 
 .focus-info {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.3rem;
   min-width: 0;
 }
 
@@ -1139,17 +1138,13 @@ h1 {
 
 .focus-title {
   margin: 0;
-  font-size: clamp(1.4rem, 3vw, 2.2rem);
+  font-size: clamp(1.15rem, 2.2vw, 1.7rem);
   line-height: 1.15;
 }
 
 .focus-track {
   color: var(--accent);
   font-weight: 600;
-}
-
-.focus-artists {
-  font-size: 1.1rem;
 }
 
 .focus-details {
@@ -1161,60 +1156,68 @@ h1 {
 }
 
 .focus-links {
-  margin-top: 0.4rem !important;
+  margin-top: 0.3rem !important;
 }
 
 .focus-tracklist {
-  margin-top: 0.6rem;
-  columns: 1;
+  margin-top: 0.3rem;
 }
 
+/* Barre de progression sur toute la largeur, puis commandes à gauche et boutons de tri à droite. */
 .focus-player {
   display: grid;
-  gap: 0.9rem;
-  justify-items: center;
+  grid-template-areas:
+    "progress progress"
+    "controls marks"
+    "help help";
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.6rem 1rem;
 }
 
 .focus-progress {
-  width: 100%;
+  grid-area: progress;
 }
 
 .focus-controls {
   display: flex;
+  grid-area: controls;
   align-items: center;
-  gap: 1rem;
+  gap: 0.6rem;
 }
 
 .focus-controls .player-button {
-  width: 3rem;
-  height: 3rem;
-  font-size: 1.1rem;
+  width: 2.6rem;
+  height: 2.6rem;
+  font-size: 1rem;
 }
 
 .focus-controls .player-toggle {
-  width: 4rem;
-  height: 4rem;
-  font-size: 1.4rem;
+  width: 3.2rem;
+  height: 3.2rem;
+  font-size: 1.2rem;
 }
 
 .focus-marks {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.6rem;
+  grid-area: marks;
+  justify-content: flex-end;
+  gap: 0.5rem;
   margin: 0;
 }
 
 .focus-marks .player-mark {
-  padding: 0.55rem 1.2rem;
-  font-size: 1rem;
+  padding: 0.45rem 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
 }
 
 .focus-help {
+  grid-area: help;
   margin: 0;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   text-align: center;
 }
 
@@ -1248,13 +1251,35 @@ h1 {
     flex-wrap: wrap;
   }
 
+  /* En colonne sur un téléphone : il faut plus que la moitié de l'écran. */
+  .focus {
+    max-height: 85vh;
+  }
+
   .focus-body {
     grid-template-columns: 1fr;
   }
 
   .focus-art {
-    width: min(100%, 360px);
+    width: min(60vw, 240px);
     justify-self: center;
+  }
+
+  .focus-player {
+    grid-template-areas:
+      "progress"
+      "controls"
+      "marks";
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .focus-progress {
+    width: 100%;
+  }
+
+  .focus-marks {
+    justify-content: center;
   }
 
   .focus-help {

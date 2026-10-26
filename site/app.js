@@ -89,7 +89,7 @@ const page = {
   open: null, // carte agrandie sur la liste de ses titres
   order: [], // identifiants des cartes affichées, dans l'ordre : ⏮ et ⏭ du lecteur
   seeking: false, // la barre de progression est en train d'être glissée
-  focus: false, // lecteur agrandi en plein écran
+  focus: false, // lecteur agrandi, sur la moitié basse de l'écran
   spotifyLogin: null, // « reconnecting » : connexion ouverte dans un onglet ; « retried » : déjà rechargé
 };
 const $ = (selector) => document.querySelector(selector);
@@ -696,7 +696,14 @@ function renderPlayer() {
   renderMarkButtons();
   renderFocus();
   dock.hidden = false;
-  document.documentElement.style.setProperty("--dock", `${dock.offsetHeight}px`);
+  updateDockSpace();
+}
+
+/** Place laissée en bas de la page (dernières cartes, messages) : celle du lecteur, agrandi ou non. */
+function updateDockSpace() {
+  const panel = page.focus ? $("#focus") : $("#player");
+  if (panel.hidden) document.documentElement.style.removeProperty("--dock");
+  else document.documentElement.style.setProperty("--dock", `${panel.offsetHeight}px`);
 }
 
 /** État du lecteur de la plateforme : bouton lecture, barre de progression, fin du titre. */
@@ -719,7 +726,7 @@ function onPlayerChange(state) {
   const button = release && $(`.card[data-id="${release.id}"] .play`);
   if (button) renderPlayButton(button, release);
   if (state.ended && release) playNext({ ended: true });
-  document.documentElement.style.setProperty("--dock", `${$("#player").offsetHeight}px`);
+  updateDockSpace();
 }
 
 function setTimes(kind, seconds) {
@@ -804,24 +811,20 @@ function playPrevious() {
 }
 
 // --- Lecteur agrandi ------------------------------------------------------------------------------
-// La sortie en cours en plein écran, avec ses titres et les boutons de tri : on trie les sorties une
-// par une, au clavier si l'on veut. Le bandeau reste chargé dessous : la musique ne s'arrête pas.
+// La sortie en cours sur la moitié basse de l'écran, avec ses titres et les boutons de tri : on trie
+// les sorties une par une, au clavier si l'on veut. La liste reste utilisable au-dessus, et le bandeau
+// reste chargé dessous : la musique ne s'arrête pas.
 
 function openFocus() {
   page.focus = true;
-  document.body.classList.add("is-focus");
   renderFocus();
   $("#focus-close").focus();
-  // Vrai plein écran quand le navigateur le permet ; la page entière, pour garder le lecteur actif.
-  document.documentElement.requestFullscreen?.().catch(() => {});
 }
 
 function closeFocus() {
   if (!page.focus) return;
   page.focus = false;
-  document.body.classList.remove("is-focus");
   renderFocus();
-  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (!$("#player").hidden) $("#player-expand").focus();
 }
 
@@ -829,7 +832,10 @@ function renderFocus() {
   const box = $("#focus");
   const release = page.player && findRelease(page.player.id);
   box.hidden = !page.focus || !release;
-  if (box.hidden) return;
+  if (box.hidden) {
+    updateDockSpace();
+    return;
+  }
   const track = page.player.track === null ? null : release.tracklist?.[page.player.track];
   const cover = $("#focus-cover");
   cover.hidden = !release.cover;
@@ -854,6 +860,7 @@ function renderFocus() {
   $("#focus-tracklist").replaceChildren(...trackItems(release));
   const todo = tabCounts(page.data.releases, page.marks).todo;
   $("#focus-count").textContent = `${plural(todo, "sortie")} à découvrir`;
+  updateDockSpace();
 }
 
 /** Raccourcis du lecteur agrandi. Ils laissent les champs tranquilles, et ne doublent pas ce que
@@ -1139,9 +1146,6 @@ async function main() {
     if (release) play(release, { track: Number(button.dataset.index) });
   });
   document.addEventListener("keydown", onFocusKey);
-  document.addEventListener("fullscreenchange", () => {
-    if (!document.fullscreenElement) closeFocus(); // sortie du plein écran par le navigateur
-  });
   $("#player-login").addEventListener("click", () => {
     page.spotifyLogin = "reconnecting";
   });
@@ -1163,9 +1167,7 @@ async function main() {
     const release = button && page.player && findRelease(page.player.id);
     if (release) play(release, { platform: button.dataset.platform });
   });
-  window.addEventListener("resize", () => {
-    if (page.player) document.documentElement.style.setProperty("--dock", `${$("#player").offsetHeight}px`);
-  });
+  window.addEventListener("resize", updateDockSpace);
   $("#hidden-list").addEventListener("click", (event) => {
     const button = event.target.closest(".unhide");
     if (!button) return;

@@ -313,6 +313,7 @@ test("lecteurs intégrés : adresses reconnues, le reste refusé", () => {
   assert.equal(yt.origin + yt.pathname, "https://www.youtube-nocookie.com/embed/4HjkTBd4bIE");
   assert.equal(yt.searchParams.get("enablejsapi"), "1"); // pilotable par messages…
   assert.equal(yt.searchParams.get("origin"), "https://fragzel.github.io"); // … depuis cette page
+  assert.equal(yt.searchParams.get("controls"), "0"); // les commandes sont celles de la page
   for (const [platform, url] of [
     ["spotify", "https://evil.test/album/x"],
     ["soundcloud", "http://soundcloud.com/nora/nuit"], // pas en https

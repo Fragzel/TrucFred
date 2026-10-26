@@ -407,7 +407,8 @@ export function embedUrl(platform, url, origin = null) {
   if (platform === "youtube" && parsed.hostname === "www.youtube.com" && parsed.pathname === "/watch") {
     const id = parsed.searchParams.get("v") ?? "";
     if (!/^[\w-]{6,20}$/.test(id)) return null;
-    const params = new URLSearchParams({ autoplay: "1", rel: "0", playsinline: "1", enablejsapi: "1" });
+    // controls=0 : les commandes sont celles du lecteur unique de la page.
+    const params = new URLSearchParams({ autoplay: "1", rel: "0", playsinline: "1", enablejsapi: "1", controls: "0" });
     if (origin) params.set("origin", origin);
     return `https://www.youtube-nocookie.com/embed/${id}?${params}`;
   }

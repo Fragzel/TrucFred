@@ -141,6 +141,10 @@ n'apparaît que dans un seul d'entre eux, et un favori ne s'affiche que dans « 
 l'étoile renvoie la sortie là où elle était : « Déjà vus » si elle avait été marquée vue,
 « À découvrir » sinon.
 
+Chaque onglet a sa couleur, reprise par les boutons qui y rangent une sortie : violet pour
+« À découvrir » (et tout ce qui lance la lecture), bleu-vert pour « Déjà vus », or pour
+« Favoris ». Le rose signale les nouveautés ; « Masquer » et les boutons secondaires restent gris.
+
 - **Ranger une sortie** : le bouton « Déjà vu » d'une carte la déplace dans « Déjà vus ».
   Recliquer dessus la remet dans « À découvrir ». « Tout marquer comme vu » range d'un coup
   toutes les sorties affichées, et chaque action peut être annulée pendant quelques secondes.

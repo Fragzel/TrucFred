@@ -4,14 +4,26 @@
   --text: #1b1b1f;
   --muted: #62626c;
   --line: #e2e2dc;
+  /* Une couleur par rôle, chacune avec sa version douce pour les fonds :
+     violet = lecture et « À découvrir », or = favori, bleu-vert = déjà vu, rose = nouveauté.
+     Les couleurs des plateformes ne servent qu'à les reconnaître. */
   --accent: #5b4cdb;
+  --accent-soft: #ecebfc;
+  --on-accent: #fff;
+  --fav: #9a5b00;
+  --fav-fill: #f5b400;
+  --fav-soft: #fff3d1;
+  --seen: #0a6f6a;
+  --seen-soft: #dcf2f0;
   --new: #d6336c;
+  --new-soft: #fde4ec;
   --spotify: #1db954;
   --soundcloud: #ff5500;
   --youtube: #ff0033;
-  --info: #e7f0ff;
-  --warning: #fff4d6;
-  --error: #ffe3e3;
+  --info: #3d7be0;
+  --warning: #d4880f;
+  --error: #d64545;
+  --error-soft: #ffe3e3;
   --radius: 12px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--text);
@@ -26,15 +38,115 @@
     --muted: #a1a1ad;
     --line: #2e2e37;
     --accent: #a59bff;
+    --accent-soft: #2b2850;
+    --on-accent: #121216;
+    --fav: #ffc83d;
+    --fav-soft: #3a3016;
+    --seen: #4fd1c5;
+    --seen-soft: #143a38;
     --new: #ff6b9a;
-    --info: #1c2a44;
-    --warning: #3d3218;
-    --error: #45201f;
+    --new-soft: #43202d;
+    --info: #6b9cf0;
+    --warning: #e0a030;
+    --error: #ff7a7a;
+    --error-soft: #45201f;
   }
+}
+
+/* Le rôle d'un bouton ou d'un onglet : sa couleur (--tone) et son fond doux (--tone-soft). */
+.tone-todo {
+  --tone: var(--accent);
+  --tone-soft: var(--accent-soft);
+}
+
+.tone-fav {
+  --tone: var(--fav);
+  --tone-soft: var(--fav-soft);
+}
+
+.tone-seen {
+  --tone: var(--seen);
+  --tone-soft: var(--seen-soft);
+}
+
+.tone-hide {
+  --tone: var(--muted);
+  --tone-soft: var(--line);
+}
+
+/* « Masquer » est le moins important des trois : sans contour tant qu'il n'est pas actif. */
+.btn-tone.tone-hide:not([aria-pressed="true"]) {
+  border-color: transparent;
 }
 
 * {
   box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* --- Boutons : trois niveaux --- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* 1. L'action principale : plein, violet. */
+.btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+/* 2. Ranger une sortie : la couleur de l'onglet où elle va, fond doux quand c'est fait. */
+.btn-tone {
+  border-color: color-mix(in srgb, var(--tone) 40%, transparent);
+  color: var(--tone);
+}
+
+.btn-tone:hover,
+.btn-tone[aria-pressed="true"] {
+  background: var(--tone-soft);
+}
+
+.btn-tone[aria-pressed="true"] {
+  border-color: var(--tone);
+  font-weight: 600;
+}
+
+/* 3. Le reste (réinitialiser, exporter, réduire…) : neutre et discret. */
+.btn-ghost {
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.btn-ghost:hover {
+  border-color: var(--muted);
+  color: var(--text);
 }
 
 body {
@@ -87,23 +199,39 @@ h1 {
   max-width: 70ch;
 }
 
+/* Avis empilés en un bloc compact : un liseré de couleur plutôt qu'un fond, pour ne pas passer
+   devant les sorties. Seules les erreurs ont un fond. */
+.notices {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.75rem;
+}
+
+.notices:empty {
+  display: none;
+}
+
 .notice {
-  margin: 0.75rem 0 0;
-  padding: 0.6rem 0.9rem;
-  border-radius: var(--radius);
-  font-size: 0.92rem;
+  margin: 0;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--tone, var(--line));
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 0.88rem;
 }
 
 .notice-info {
-  background: var(--info);
+  --tone: var(--info);
 }
 
 .notice-warning {
-  background: var(--warning);
+  --tone: var(--warning);
 }
 
 .notice-error {
-  background: var(--error);
+  --tone: var(--error);
+  background: var(--error-soft);
 }
 
 .late {
@@ -111,27 +239,7 @@ h1 {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 1rem;
-}
-
-.late[hidden] {
-  display: none;
-}
-
-.run-now {
-  padding: 0.35rem 0.9rem;
-  border: 0;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--surface);
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.run-now:disabled {
-  opacity: 0.6;
-  cursor: progress;
+  margin-top: 0.3rem;
 }
 
 .run-dialog {
@@ -164,7 +272,7 @@ h1 {
 .run-error {
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius);
-  background: var(--error);
+  background: var(--error-soft);
 }
 
 .run-token {
@@ -214,12 +322,18 @@ h1 {
   margin: 0;
 }
 
+/* Filtres sur deux lignes : la recherche et le style, puis les pastilles. */
 .filters {
+  display: grid;
+  gap: 0.6rem;
+  margin: 1.1rem 0 0;
+}
+
+.filters-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.6rem 1rem;
-  margin: 1.25rem 0 0.5rem;
+  gap: 0.5rem 0.9rem;
 }
 
 .filters input[type="search"] {
@@ -253,36 +367,91 @@ h1 {
   clip-path: inset(50%);
 }
 
+/* Pastilles de filtre, case cachée : par défaut tout est coché et reste calme ; une pastille
+   décochée s'efface et se barre. */
 .chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.75rem;
+  gap: 0.4rem;
+  padding: 0.25rem 0.75rem;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   cursor: pointer;
+  user-select: none;
 }
 
-.chip:has(input:checked) {
-  border-color: var(--accent);
+.chip input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chip:hover {
+  border-color: var(--muted);
+}
+
+.chip:has(input:focus-visible) {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.chips .chip:has(input:not(:checked)) {
+  background: none;
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+/* Plateformes : un point à leur couleur. */
+#platforms .chip::before {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--dot, var(--muted));
+  content: "";
+}
+
+#platforms .chip:has(input:not(:checked))::before {
+  opacity: 0.35;
+}
+
+.chip-spotify {
+  --dot: var(--spotify);
+}
+
+.chip-soundcloud {
+  --dot: var(--soundcloud);
+}
+
+.chip-youtube {
+  --dot: var(--youtube);
+}
+
+/* « Nouveautés seulement » : neutre au repos, rose quand le filtre est actif. */
+.chip-new {
+  color: var(--muted);
+}
+
+.chip-new:has(input:checked) {
+  border-color: var(--new);
+  background: var(--new-soft);
+  color: var(--new);
+  font-weight: 600;
 }
 
 .style-menu {
   max-width: 100%;
-  padding: 0.3rem 0.75rem;
+  padding: 0.5rem 0.8rem;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface);
   color: inherit;
   font: inherit;
-  font-size: 0.9rem;
   cursor: pointer;
-}
-
-.style-menu[hidden] {
-  display: none;
 }
 
 .toggle {
@@ -292,15 +461,19 @@ h1 {
   font-size: 0.9rem;
 }
 
-.reset {
-  padding: 0.3rem 0.75rem;
-  border: 0;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.9rem;
-  text-decoration: underline;
-  cursor: pointer;
+/* Au-dessus de la liste : le nombre de sorties affichées, et l'action sur toutes à la fois. */
+.list-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  min-height: 2rem;
+  margin-top: 0.9rem;
+}
+
+.list-bar .btn {
+  margin-left: auto;
 }
 
 .empty {
@@ -407,6 +580,9 @@ h1 {
 }
 
 .new {
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--new-soft);
   color: var(--new);
 }
 
@@ -416,19 +592,23 @@ h1 {
 
 /* --- Onglets, marques, annulation --- */
 
+/* Onglets soulignés à leur couleur ; le compteur la porte toujours, même onglet fermé. */
 .tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
+  gap: 0.25rem 1.5rem;
   margin-top: 1.1rem;
   border-bottom: 1px solid var(--line);
 }
 
 .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   margin-bottom: -1px;
-  padding: 0.5rem 0.9rem;
-  border: 1px solid transparent;
-  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 0.55rem 0.1rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
   background: none;
   color: var(--muted);
   font: inherit;
@@ -436,20 +616,37 @@ h1 {
   cursor: pointer;
 }
 
+.tab:hover {
+  color: var(--text);
+}
+
+.tab[aria-selected="true"] {
+  border-bottom-color: var(--tone);
+  color: var(--text);
+}
+
+.tab-count {
+  min-width: 1.7rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: var(--tone-soft);
+  color: var(--tone);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
 @media (max-width: 480px) {
+  .tabs {
+    gap: 0.25rem 1rem;
+  }
+
   .tab {
-    padding: 0.45rem 0.55rem;
     font-size: 0.88rem;
   }
 }
 
-.tab[aria-selected="true"] {
-  border-color: var(--line);
-  border-bottom-color: var(--bg);
-  background: var(--bg);
-  color: var(--text);
-}
-
+/* Étoile sur la pochette : discrète, puis pleine et dorée une fois en favori. */
 .mark-fav {
   position: absolute;
   top: 0.3rem;
@@ -465,61 +662,31 @@ h1 {
   cursor: pointer;
 }
 
+.mark-fav:hover {
+  background: rgb(0 0 0 / 75%);
+  color: var(--fav-fill);
+}
+
 .mark-fav[aria-pressed="true"] {
-  color: #ffc83d;
-}
-
-.actions {
-  padding-top: 0.3rem;
-}
-
-.mark-seen {
-  padding: 0.15rem 0.55rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.72rem;
-  cursor: pointer;
-}
-
-.mark-seen[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--fav-fill);
+  color: #3d2800;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 30%);
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
+  padding-top: 0.35rem;
 }
 
-.mark-hide {
-  padding: 0.15rem 0.4rem;
-  border: 0;
-  background: none;
-  color: var(--muted);
-  font: inherit;
+.actions .btn {
+  padding: 0.12rem 0.45rem;
   font-size: 0.72rem;
-  text-decoration: underline;
-  cursor: pointer;
 }
 
-.hidden-box summary {
-  cursor: pointer;
-}
-
-.hidden-box ul {
-  margin: 0.4rem 0 0;
-  padding-left: 1.2rem;
-}
-
-.marks-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem 0.5rem;
+.actions .tone-hide {
+  padding-inline: 0.25rem;
 }
 
 .import input {
@@ -531,6 +698,7 @@ h1 {
 
 .import:focus-within {
   outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .toast {
@@ -586,7 +754,7 @@ h1 {
 /* Style sous les artistes : une ligne, le détail des genres au survol. */
 .styles {
   overflow: hidden;
-  color: var(--accent);
+  color: var(--muted);
   font-size: 0.72rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -639,6 +807,67 @@ h1 {
   font-size: 0.85rem;
 }
 
+/* « Sur cet appareil » : marques, sorties masquées, token et verrou, une ligne chacun. */
+.device {
+  padding: 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.device h2 {
+  margin: 0;
+  padding: 0.7rem 0 0.5rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.device-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.device-row p {
+  margin: 0;
+}
+
+.device-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.hidden-box {
+  display: block;
+}
+
+.hidden-box summary {
+  cursor: pointer;
+}
+
+.hidden-box ul {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.hidden-box .btn {
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.credits {
+  margin: 1.25rem 0 0;
+}
+
 /* --- Lecture --- */
 
 .art {
@@ -654,7 +883,7 @@ h1 {
   border: 0;
   border-radius: 999px;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 0.95rem;
   line-height: 1;
   cursor: pointer;
@@ -670,8 +899,8 @@ h1 {
 }
 
 .card.is-playing .play {
-  background: #fff;
-  color: #5b4cdb;
+  background: var(--surface);
+  color: var(--accent);
 }
 
 .show-tracks {
@@ -712,17 +941,6 @@ h1 {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.play-all {
-  padding: 0.3rem 0.8rem;
-  border: 0;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #fff;
-  font: inherit;
-  font-size: 0.85rem;
-  cursor: pointer;
 }
 
 .tracklist {
@@ -937,13 +1155,31 @@ h1 {
   cursor: pointer;
 }
 
+.player-button:hover {
+  border-color: var(--muted);
+}
+
 .player-toggle {
   width: 2.6rem;
   height: 2.6rem;
   border: 0;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 0.95rem;
+}
+
+.player-toggle:hover {
+  filter: brightness(1.1);
+}
+
+/* Agrandir et fermer : la fenêtre du lecteur, pas la musique ; à l'écart, sans bordure. */
+.player-window {
+  border-color: transparent;
+  color: var(--muted);
+}
+
+#player-expand {
+  margin-left: 0.5rem;
 }
 
 .player-progress {
@@ -983,6 +1219,16 @@ h1 {
 
 .player-source {
   color: var(--muted);
+  text-decoration: none;
+}
+
+.player-source::after {
+  content: " ↗" / "";
+}
+
+.player-source:hover {
+  color: var(--text);
+  text-decoration: underline;
 }
 
 .player-platforms {
@@ -991,6 +1237,9 @@ h1 {
 }
 
 .player-platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   padding: 0.15rem 0.55rem;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -998,6 +1247,31 @@ h1 {
   color: var(--muted);
   font: inherit;
   cursor: pointer;
+}
+
+.player-platform:hover {
+  border-color: var(--muted);
+  color: var(--text);
+}
+
+.player-platform::before {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--dot, var(--muted));
+  content: "";
+}
+
+.player-platform[data-platform="spotify"] {
+  --dot: var(--spotify);
+}
+
+.player-platform[data-platform="soundcloud"] {
+  --dot: var(--soundcloud);
+}
+
+.player-platform[data-platform="youtube"] {
+  --dot: var(--youtube);
 }
 
 .player-note {
@@ -1030,21 +1304,7 @@ h1 {
 
 .player-mark {
   padding: 0.15rem 0.6rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.player-mark[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.player-mark[hidden] {
-  display: none;
+  font-size: inherit;
 }
 
 /* --- Lecteur agrandi : un panneau sur la moitié basse de l'écran, pour trier une par une --- */
@@ -1210,7 +1470,6 @@ h1 {
 .focus-marks .player-mark {
   padding: 0.45rem 1rem;
   font-size: 0.95rem;
-  font-weight: 600;
 }
 
 .focus-help {

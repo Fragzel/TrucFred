@@ -49,7 +49,6 @@ const ICONS = {
     '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>',
 };
 
-const TAB_LABELS = { todo: "À découvrir", seen: "Déjà vus", fav: "Favoris" };
 const EMPTY_TAB = {
   todo: "Tout est vu : les prochaines sorties arriveront ici.",
   seen: "Rien ici pour l'instant : marque une sortie avec « Déjà vu » pour la ranger ici.",
@@ -383,7 +382,7 @@ function renderChips(fieldset, name, entries, selected) {
   fieldset.querySelectorAll("label").forEach((label) => label.remove());
   for (const [value, text] of entries) {
     const label = document.createElement("label");
-    label.className = "chip";
+    label.className = `chip chip-${value}`;
     const input = document.createElement("input");
     Object.assign(input, { type: "checkbox", name, value, checked: !selected || selected.has(value) });
     label.append(input, document.createTextNode(text));
@@ -514,7 +513,7 @@ function card(release, fresh, moved) {
   const favorite = Boolean(page.marks.fav[release.id]);
   const seenButton = node.querySelector(".mark-seen");
   seenButton.setAttribute("aria-pressed", String(seen));
-  seenButton.textContent = seen ? "✓ Vu" : "Déjà vu";
+  seenButton.textContent = seen ? "✓ Vu" : "✓ Déjà vu";
   seenButton.title = seen ? "Remettre dans « À découvrir »" : "Ranger dans « Déjà vus »";
   seenButton.hidden = favorite; // un favori ne vit que dans l'onglet « Favoris »
   const hidden = Boolean(page.marks.hiddenReleases[release.id]);
@@ -582,7 +581,7 @@ function renderTabs() {
     const selected = tab === page.filters.tab;
     button.setAttribute("aria-selected", String(selected));
     button.tabIndex = selected ? 0 : -1;
-    button.textContent = `${TAB_LABELS[tab]} (${counts[tab]})`;
+    button.querySelector(".tab-count").textContent = counts[tab];
   }
 }
 
@@ -617,12 +616,16 @@ function render() {
   } else {
     empty.textContent = pool.length ? "Aucune sortie ne correspond à ces filtres." : EMPTY_TAB[page.filters.tab];
   }
+  // Au-dessus de la liste : combien de sorties sont affichées, et l'action sur toutes à la fois.
+  const filtered = Boolean(formatHash({ ...page.filters, tab: "todo" }));
+  $("#reset").hidden = !filtered;
+  $("#shown").textContent = pool.length
+    ? `${plural(page.visible.length, "sortie")}${page.visible.length < pool.length ? ` sur ${pool.length}` : ""}`
+    : "";
   const markAll = $("#mark-all");
   markAll.hidden = tab === "fav" || page.visible.length < 2;
-  markAll.textContent =
-    tab === "seen"
-      ? `Tout remettre dans « À découvrir » (${page.visible.length})`
-      : `Tout marquer comme vu (${page.visible.length})`;
+  markAll.className = `btn btn-tone ${tab === "seen" ? "tone-todo" : "tone-seen"}`;
+  markAll.textContent = tab === "seen" ? "↺ Tout remettre dans « À découvrir »" : "✓ Tout marquer comme vu";
   renderHidden();
   renderMarkButtons();
   renderFocus();
@@ -740,7 +743,7 @@ function renderMarkButtons() {
   const favorite = Boolean(page.marks.fav[release.id]);
   const states = {
     fav: [favorite, favorite ? "★ Favori" : "☆ Favori"],
-    seen: [Boolean(page.marks.seen[release.id]), page.marks.seen[release.id] ? "✓ Vu" : "Déjà vu"],
+    seen: [Boolean(page.marks.seen[release.id]), page.marks.seen[release.id] ? "✓ Vu" : "✓ Déjà vu"],
     hide: [Boolean(page.marks.hiddenReleases[release.id]), page.marks.hiddenReleases[release.id] ? "Masquée" : "Masquer"],
   };
   for (const button of document.querySelectorAll("[data-mark]")) {
@@ -910,7 +913,7 @@ function renderHidden() {
   const item = (text, kind, id, name) => {
     const entry = document.createElement("li");
     const button = document.createElement("button");
-    Object.assign(button, { type: "button", className: "reset unhide", textContent: "Réafficher" });
+    Object.assign(button, { type: "button", className: "btn btn-ghost unhide", textContent: "Réafficher" });
     Object.assign(button.dataset, { kind, id, name });
     entry.append(document.createTextNode(`${text} `), button);
     return entry;

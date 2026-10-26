@@ -27,28 +27,36 @@
         </label>
         <label class="toggle"><input id="remember" type="checkbox" checked> Se souvenir de cet appareil</label>
         <p id="unlock-error" class="run-error" role="alert" hidden>Mot de passe incorrect.</p>
-        <p class="run-buttons"><button type="submit" class="run-now">Ouvrir</button></p>
+        <p class="run-buttons"><button type="submit" class="btn btn-primary">Ouvrir</button></p>
       </form>
       <p id="rotation" class="meta rotation" hidden></p>
-      <div id="notices" role="status"></div>
+      <div id="notices" class="notices" role="status"></div>
       <div id="late" class="notice notice-warning late" hidden>
         <span id="late-text"></span>
-        <button id="run-now" type="button" class="run-now">Lancer la mise à jour</button>
+        <button id="run-now" type="button" class="btn btn-primary">Lancer la mise à jour</button>
       </div>
+      <!-- Une couleur par onglet ; les boutons qui rangent une sortie prennent celle de sa destination. -->
       <nav class="tabs" role="tablist" aria-label="Classement des sorties">
-        <button class="tab" type="button" role="tab" data-tab="todo" aria-controls="list">À découvrir</button>
-        <button class="tab" type="button" role="tab" data-tab="seen" aria-controls="list">Déjà vus</button>
-        <button class="tab" type="button" role="tab" data-tab="fav" aria-controls="list">Favoris</button>
+        <button class="tab tone-todo" type="button" role="tab" data-tab="todo" aria-controls="list">À découvrir <span class="tab-count"></span></button>
+        <button class="tab tone-seen" type="button" role="tab" data-tab="seen" aria-controls="list">Déjà vus <span class="tab-count"></span></button>
+        <button class="tab tone-fav" type="button" role="tab" data-tab="fav" aria-controls="list">Favoris <span class="tab-count"></span></button>
       </nav>
       <form id="filters" class="filters" role="search">
-        <input id="q" type="search" placeholder="Artiste ou titre" aria-label="Rechercher un artiste ou un titre" autocomplete="off">
-        <fieldset id="platforms" class="chips" hidden><legend>Plateformes</legend></fieldset>
-        <fieldset id="types" class="chips" hidden><legend>Types</legend></fieldset>
-        <select id="style" class="style-menu" aria-label="Style musical" hidden></select>
-        <label class="toggle"><input id="new-only" type="checkbox"> Nouveautés seulement</label>
-        <button id="reset" type="button" class="reset">Réinitialiser</button>
-        <button id="mark-all" type="button" class="reset" hidden>Tout marquer comme vu</button>
+        <div class="filters-row">
+          <input id="q" type="search" placeholder="Artiste ou titre" aria-label="Rechercher un artiste ou un titre" autocomplete="off">
+          <select id="style" class="style-menu" aria-label="Style musical" hidden></select>
+        </div>
+        <div class="filters-row">
+          <fieldset id="platforms" class="chips" hidden><legend>Plateformes</legend></fieldset>
+          <fieldset id="types" class="chips" hidden><legend>Types</legend></fieldset>
+          <label class="chip chip-new"><input id="new-only" type="checkbox"> ✦ Nouveautés seulement</label>
+          <button id="reset" type="button" class="btn btn-ghost" hidden>Réinitialiser</button>
+        </div>
       </form>
+      <div class="list-bar">
+        <p id="shown" class="meta"></p>
+        <button id="mark-all" type="button" class="btn btn-tone" hidden></button>
+      </div>
     </header>
 
     <main>
@@ -57,24 +65,30 @@
     </main>
 
     <footer class="foot">
-      <p class="marks-tools">
-        Tes marques « déjà vu » et favoris restent dans ce navigateur.
-        <button id="export" type="button" class="reset">Exporter</button>
-        <label class="reset import">Importer<input id="import" type="file" accept="application/json,.json"></label>
-      </p>
-      <p id="token-tools" class="marks-tools" hidden>
-        Un token GitHub est enregistré dans ce navigateur pour lancer la mise à jour.
-        <button id="forget-token" type="button" class="reset">Oublier le token</button>
-      </p>
-      <p id="lock-tools" class="marks-tools" hidden>
-        Page protégée par mot de passe.
-        <button id="lock" type="button" class="reset">Verrouiller cet appareil</button>
-      </p>
-      <details id="hidden-box" class="hidden-box" hidden>
-        <summary id="hidden-summary"></summary>
-        <ul id="hidden-list"></ul>
-      </details>
-      <p>
+      <!-- Tout ce qui ne vit que dans ce navigateur, regroupé. -->
+      <section class="device" aria-labelledby="device-title">
+        <h2 id="device-title">Sur cet appareil</h2>
+        <div class="device-row">
+          <p>Tes marques « déjà vu » et favoris restent dans ce navigateur.</p>
+          <p class="device-actions">
+            <button id="export" type="button" class="btn btn-ghost">Exporter</button>
+            <label class="btn btn-ghost import">Importer<input id="import" type="file" accept="application/json,.json"></label>
+          </p>
+        </div>
+        <details id="hidden-box" class="device-row hidden-box" hidden>
+          <summary id="hidden-summary"></summary>
+          <ul id="hidden-list"></ul>
+        </details>
+        <div id="token-tools" class="device-row" hidden>
+          <p>Un token GitHub est enregistré dans ce navigateur pour lancer la mise à jour.</p>
+          <p class="device-actions"><button id="forget-token" type="button" class="btn btn-ghost">Oublier le token</button></p>
+        </div>
+        <div id="lock-tools" class="device-row" hidden>
+          <p>Page protégée par mot de passe.</p>
+          <p class="device-actions"><button id="lock" type="button" class="btn btn-ghost">Verrouiller cet appareil</button></p>
+        </div>
+      </section>
+      <p class="credits">
         Données fournies par <a href="https://open.spotify.com" rel="noopener">Spotify</a>,
         <a href="https://soundcloud.com" rel="noopener">SoundCloud</a>
         et <a href="https://www.youtube.com" rel="noopener">YouTube</a>, chaque son étant crédité
@@ -99,8 +113,8 @@
               <button type="button" class="player-button" data-player="prev" aria-label="Précédent" title="Précédent">⏮</button>
               <button type="button" class="player-button player-toggle" data-player="toggle" aria-label="Lecture" title="Lecture">▶</button>
               <button type="button" class="player-button" data-player="next" aria-label="Suivant" title="Suivant">⏭</button>
-              <button id="player-expand" type="button" class="player-button" aria-label="Agrandir le lecteur" title="Agrandir : trier les sorties une par une">⤢</button>
-              <button id="player-close" type="button" class="player-button" aria-label="Fermer le lecteur" title="Fermer le lecteur">✕</button>
+              <button id="player-expand" type="button" class="player-button player-window" aria-label="Agrandir le lecteur" title="Agrandir : trier les sorties une par une">⤢</button>
+              <button id="player-close" type="button" class="player-button player-window" aria-label="Fermer le lecteur" title="Fermer le lecteur">✕</button>
             </div>
           </div>
           <div class="player-progress">
@@ -110,9 +124,9 @@
           </div>
           <p class="player-foot">
             <span class="player-marks">
-              <button type="button" class="player-mark" data-mark="fav" aria-pressed="false">☆ Favori</button>
-              <button type="button" class="player-mark" data-mark="seen" aria-pressed="false">Déjà vu</button>
-              <button type="button" class="player-mark" data-mark="hide" aria-pressed="false">Masquer</button>
+              <button type="button" class="btn btn-tone tone-fav player-mark" data-mark="fav" aria-pressed="false">☆ Favori</button>
+              <button type="button" class="btn btn-tone tone-seen player-mark" data-mark="seen" aria-pressed="false">✓ Déjà vu</button>
+              <button type="button" class="btn btn-tone tone-hide player-mark" data-mark="hide" aria-pressed="false">Masquer</button>
             </span>
             <a id="player-source" class="player-source" target="_blank" rel="noopener"></a>
             <a id="player-login" class="player-login" href="https://accounts.spotify.com/login?continue=https%3A%2F%2Fopen.spotify.com%2F" target="_blank" rel="noopener" hidden>Se reconnecter à Spotify</a>
@@ -128,7 +142,7 @@
       <div class="focus-inner">
         <header class="focus-top">
           <p id="focus-count" class="focus-count"></p>
-          <button id="focus-close" type="button" class="player-button" aria-label="Réduire le lecteur" title="Réduire (Échap)">✕</button>
+          <button id="focus-close" type="button" class="player-button player-window"aria-label="Réduire le lecteur" title="Réduire (Échap)">✕</button>
         </header>
         <div class="focus-body">
           <div class="focus-art">
@@ -158,9 +172,9 @@
             <button type="button" class="player-button" data-player="next" aria-label="Suivant" title="Suivant (→)">⏭</button>
           </div>
           <p class="focus-marks">
-            <button type="button" class="player-mark" data-mark="fav" aria-pressed="false" title="Favori (F)">☆ Favori</button>
-            <button type="button" class="player-mark" data-mark="seen" aria-pressed="false" title="Déjà vu, et sortie suivante (V)">Déjà vu</button>
-            <button type="button" class="player-mark" data-mark="hide" aria-pressed="false" title="Masquer, et sortie suivante (M)">Masquer</button>
+            <button type="button" class="btn btn-tone tone-fav player-mark" data-mark="fav" aria-pressed="false" title="Favori (F)">☆ Favori</button>
+            <button type="button" class="btn btn-tone tone-seen player-mark" data-mark="seen" aria-pressed="false" title="Déjà vu, et sortie suivante (V)">✓ Déjà vu</button>
+            <button type="button" class="btn btn-tone tone-hide player-mark" data-mark="hide" aria-pressed="false" title="Masquer, et sortie suivante (M)">Masquer</button>
           </p>
           <p class="focus-help">Espace : lecture ou pause · ← → : précédent, suivant · F : favori · V : déjà vu · M : masquer · Échap : réduire</p>
         </div>
@@ -189,8 +203,8 @@
           <input id="run-token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…">
         </label>
         <p class="run-buttons">
-          <button type="submit" value="close" class="reset">Fermer</button>
-          <button type="submit" value="save" class="run-now">Enregistrer et lancer</button>
+          <button type="submit" value="close" class="btn btn-ghost">Fermer</button>
+          <button type="submit" value="save" class="btn btn-primary">Enregistrer et lancer</button>
         </p>
       </form>
     </dialog>
@@ -220,13 +234,13 @@
           <p class="details"><time class="date"></time><span class="tracks"></span></p>
           <p class="links"></p>
           <p class="actions">
-            <button class="mark-seen" type="button" aria-pressed="false">Déjà vu</button>
-            <button class="mark-hide" type="button">Masquer</button>
+            <button class="mark-seen btn btn-tone tone-seen" type="button" aria-pressed="false">✓ Déjà vu</button>
+            <button class="mark-hide btn btn-tone tone-hide" type="button">Masquer</button>
           </p>
           <div class="tracklist-box" hidden>
             <p class="tracklist-actions">
-              <button class="play-all" type="button">▶ Tout lire</button>
-              <button class="close-tracks reset" type="button">Réduire</button>
+              <button class="play-all btn btn-primary" type="button">▶ Tout lire</button>
+              <button class="close-tracks btn btn-ghost" type="button">Réduire</button>
             </p>
             <ol class="tracklist"></ol>
             <p class="tracklist-empty" hidden>Titres pas encore lus : « Tout lire » joue la sortie en entier.</p>

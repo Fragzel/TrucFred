@@ -28,6 +28,7 @@ active_within_days = 365    # artiste « actif » : une sortie dans l'année
 active_interval_days = 2    # vérifié environ tous les 2 jours…
 dormant_interval_days = 7   # … contre tous les 7 jours pour un artiste en sommeil
 full_check_days = 30        # relecture complète au moins une fois par mois, même sans changement
+tracklist_calls = 10        # titres des EP et albums (lecture sur la page) : 1 appel par album, pris avant les artistes
 
 [soundcloud]
 # Ton compte (SOUNDCLOUD_USER_URN) est enregistré par « uv run newrel auth soundcloud ».
@@ -39,6 +40,7 @@ max_pages = 3
 time_budget_minutes = 15
 max_retry_after_seconds = 120
 full_check_days = 30
+tracklist_calls = 50        # titres des playlists lues avant le 26/10 : 1 appel par playlist, une seule fois
 
 [youtube]
 # Abonnements publics de la chaîne YOUTUBE_CHANNEL_ID, lus avec une clé API (« uv run newrel

@@ -106,6 +106,21 @@ def test_genre_declare_et_tags_de_sa_famille() -> None:
     assert playlist_to_item(album, PARIS)[0].genres == ["Drum & Bass"]
 
 
+def test_titres_d_une_playlist() -> None:
+    user = nora()
+    tracks = (
+        sc_track(3, "Un", "2026/10/16 08:00:00 +0000", user),
+        {**sc_track(4, "Bloqué", "2026/10/16 08:00:00 +0000", user), "access": "blocked"},
+        sc_track(5, "Deux", "2026/10/16 08:00:00 +0000", user),
+    )
+    album = sc_playlist(7, "Échos", "2026/10/16 09:00:00 +0000", user, tracks=tracks)
+    item, _ = playlist_to_item(album, PARIS)
+    assert [(t.title, t.url) for t in item.tracklist] == [
+        ("Un", "https://soundcloud.com/noravelasco/son-3"),
+        ("Deux", "https://soundcloud.com/noravelasco/son-5"),
+    ]
+
+
 # --- Collecte -----------------------------------------------------------------------------------
 
 
@@ -189,3 +204,18 @@ def test_jeton_jamais_envoye_hors_de_l_api(router) -> None:
     with pytest.raises(HttpError, match="hors de l'API"):
         api.collection("/users/1/followings", {}, max_pages=3)
     assert not evil.called
+
+
+def test_titres_des_playlists_connues_lus_une_fois(fake_soundcloud) -> None:
+    user = nora()
+    fake_soundcloud.follow(user)
+    track = sc_track(3, "Un", "2026/10/10 08:00:00 +0000", user)
+    fake_soundcloud.upload(user, track)
+    album = sc_playlist(7, "Échos", "2026/10/10 09:00:00 +0000", user, tracks=(track,))
+    fake_soundcloud.publish(user, album)
+    wanted = ("soundcloud:playlists:7", "soundcloud:playlists:404")
+    ctx = context(artists=known(user, total=2), tracklists_wanted=wanted)
+    result = collect_soundcloud_quickly(ctx)
+    assert fake_soundcloud.catalog_calls == 0  # compte inchangé : pas relu
+    assert [t.title for t in result.tracklists["soundcloud:playlists:7"]] == ["Un"]
+    assert result.tracklists["soundcloud:playlists:404"] == []

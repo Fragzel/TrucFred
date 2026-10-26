@@ -236,6 +236,7 @@ def test_sortie_datee_a_l_annee_classee_au_jour_de_detection(tmp_path, one_artis
 
 def test_deux_runs_identiques_donnent_le_meme_resultat(tmp_path, one_artist) -> None:
     run(tmp_path)
+    run(tmp_path)  # lit les titres de l'album trouvé au premier run
     first = (tmp_path / "data" / "releases.json").read_bytes()
     run(tmp_path)
     assert (tmp_path / "data" / "releases.json").read_bytes() == first
@@ -419,3 +420,24 @@ def test_son_d_un_label_rejoint_la_sortie_spotify_de_l_artiste(
     [release] = published(tmp_path)["releases"]
     assert [link["platform"] for link in release["links"]] == ["spotify", "soundcloud"]
     assert [artist["name"] for artist in release["artists"]] == ["Hellfish"]  # pas le label
+
+
+def test_titres_d_un_ep_publies_et_gardes_aux_relectures(tmp_path, fake_spotify) -> None:
+    fake_spotify.follow(("A1", "Nora Velasco"))
+    ep = album("e1", "Basse saison", "2026-10-16", album_type="single", tracks=4)
+    fake_spotify.publish("A1", "single", ep)
+    run(tmp_path)
+    assert by_title(tmp_path)["Basse saison"]["tracklist"] == []  # lus au run suivant
+    run(tmp_path, now=NOW + DAY)
+    tracks = by_title(tmp_path)["Basse saison"]["tracklist"]
+    assert [track["title"] for track in tracks] == [f"Basse saison {n}" for n in range(1, 5)]
+    assert tracks[0] == {
+        "platform": "spotify",
+        "title": "Basse saison 1",
+        "url": "https://open.spotify.com/track/e1t1",
+        "duration_ms": 181_000,
+    }
+    calls = fake_spotify.album_route.call_count
+    run(tmp_path, now=NOW + 40 * DAY)  # relecture complète de l'artiste : titres gardés
+    assert fake_spotify.album_route.call_count == calls
+    assert len(by_title(tmp_path)["Basse saison"]["tracklist"]) == 4

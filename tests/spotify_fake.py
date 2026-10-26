@@ -1,4 +1,5 @@
-"""Faux service Spotify pour respx : abonnements paginés, albums par artiste et par groupe.
+"""Faux service Spotify pour respx : abonnements paginés, albums par artiste et par groupe,
+titres d'un album.
 
 Reproduit les contraintes 2026 utiles aux tests : limit ≤ 10 sur les albums, un seul groupe
 par appel, token utilisateur pour /me/following et token d'application pour le catalogue.
@@ -77,6 +78,9 @@ class FakeSpotify:
         self.albums_route = router.get(
             url__regex=rf"{re.escape(API_URL)}/artists/(?P<artist_id>[^/]+)/albums"
         ).mock(side_effect=self._albums)
+        self.album_route = router.get(
+            url__regex=rf"{re.escape(API_URL)}/albums/(?P<album_id>[^/?]+)"
+        ).mock(side_effect=self._album)
 
     def follow(self, *artists: tuple[str, str]) -> None:
         self.followed.extend(artists)
@@ -142,12 +146,8 @@ class FakeSpotify:
         groups = group.split(",")
         # Plusieurs groupes à la fois : seulement pour lire le total (limit=1), comme newrel.
         assert (len(groups) == 1 or limit == 1) and limit <= 10 and params["market"] == "FR"
-        self.catalog_calls += 1
-        if self.quota is not None and self.catalog_calls > self.quota:
-            body = {
-                "error": {"status": 429, "message": "Too many requests", "reason": "QUOTA_EXCEEDED"}
-            }
-            return httpx.Response(429, headers={"Retry-After": "86111"}, json=body)
+        if exceeded := self._count_catalog_call():
+            return exceeded
         if artist_id in self.failing_artists:
             return httpx.Response(503)
         if artist_id in self.rate_limited_artists:
@@ -166,3 +166,34 @@ class FakeSpotify:
             "total": len(albums),
         }
         return httpx.Response(200, json=page)
+
+    def _count_catalog_call(self) -> httpx.Response | None:
+        """Décompte un appel catalogue ; la réponse QUOTA_EXCEEDED une fois le quota dépassé."""
+        self.catalog_calls += 1
+        if self.quota is None or self.catalog_calls <= self.quota:
+            return None
+        body = {
+            "error": {"status": 429, "message": "Too many requests", "reason": "QUOTA_EXCEEDED"}
+        }
+        return httpx.Response(429, headers={"Retry-After": "86111"}, json=body)
+
+    def _album(self, request: httpx.Request, album_id: str) -> httpx.Response:
+        """Un album et ses titres, nommés « Titre de l'album n »."""
+        assert request.headers["Authorization"] == "Bearer app-token"
+        if exceeded := self._count_catalog_call():
+            return exceeded
+        found = next(
+            (a for albums in self.albums.values() for a in albums if a["id"] == album_id), None
+        )
+        if found is None:
+            return httpx.Response(404, json={"error": {"status": 404, "message": "Not found"}})
+        tracks = [
+            {
+                "id": f"{album_id}t{n}",
+                "name": f"{found['name']} {n}",
+                "duration_ms": 180_000 + n * 1000,
+                "external_urls": {"spotify": f"https://open.spotify.com/track/{album_id}t{n}"},
+            }
+            for n in range(1, found["total_tracks"] + 1)
+        ]
+        return httpx.Response(200, json={**found, "tracks": {"items": tracks, "next": None}})

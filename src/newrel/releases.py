@@ -195,6 +195,7 @@ def _release(
             ),
         )
     with_cover = next((link.item for link in ranked if link.item.cover), None)
+    tracklist = next((link.item.tracklist for link in ranked if link.item.tracklist), [])
     seen_day = first.first_seen.astimezone(tz).date()
     historical = dates.historical(
         dated.date, dated.precision, seen_day, first.backfill, max_age_days
@@ -216,4 +217,5 @@ def _release(
         if with_cover and with_cover.cover
         else None,
         links=list(per_platform.values()),
+        tracklist=tracklist,
     )

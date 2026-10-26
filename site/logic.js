@@ -371,6 +371,74 @@ export function tabCounts(releases, marks) {
   return counts;
 }
 
+// --- Lecture --------------------------------------------------------------------------------------
+// Lecteurs intégrés officiels (iframes Spotify, SoundCloud, YouTube) : aucun script tiers dans la page.
+
+/** Morceaux entiers sans compte d'abord : Spotify ne joue que des extraits hors connexion. */
+const PLAY_ORDER = ["soundcloud", "youtube", "spotify"];
+
+/** Adresse du lecteur intégré d'un lien (sortie ou titre) ; null si l'adresse n'est pas reconnue. */
+export function embedUrl(platform, url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:") return null;
+  if (platform === "spotify" && parsed.hostname === "open.spotify.com") {
+    const match = parsed.pathname.match(/^\/(album|track)\/([A-Za-z0-9]+)$/);
+    return match ? `https://open.spotify.com/embed/${match[1]}/${match[2]}` : null;
+  }
+  if (platform === "soundcloud" && parsed.hostname === "soundcloud.com") {
+    const params = new URLSearchParams({
+      url: parsed.href,
+      auto_play: "true",
+      visual: "false",
+      hide_related: "true",
+      show_comments: "false",
+      show_reposts: "false",
+      show_teaser: "false",
+    });
+    return `https://w.soundcloud.com/player/?${params}`;
+  }
+  if (platform === "youtube" && parsed.hostname === "www.youtube.com" && parsed.pathname === "/watch") {
+    const id = parsed.searchParams.get("v") ?? "";
+    return /^[\w-]{6,20}$/.test(id) ? `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&playsinline=1` : null;
+  }
+  return null;
+}
+
+/** Liens jouables d'une sortie, le préféré d'abord : la plateforme de ses titres s'il y en a,
+ * puis SoundCloud et YouTube (morceaux entiers sans compte), puis Spotify. */
+export function playableLinks(release) {
+  const own = release.tracklist?.[0]?.platform;
+  const rank = (platform) => (platform === own ? -1 : PLAY_ORDER.indexOf(platform));
+  return release.links
+    .filter((link) => embedUrl(link.platform, link.url))
+    .sort((a, b) => rank(a.platform) - rank(b.platform));
+}
+
+/** Ce que joue le lecteur : un titre de la sortie (`track`), ou la sortie entière sur `platform`. */
+export function playerSource(release, { platform, track }) {
+  const item = track === null ? null : release.tracklist?.[track];
+  if (item) return { platform: item.platform, src: embedUrl(item.platform, item.url) };
+  const link = release.links.find((candidate) => candidate.platform === platform) ?? playableLinks(release)[0];
+  return link ? { platform: link.platform, src: embedUrl(link.platform, link.url) } : null;
+}
+
+/** Sortie à plusieurs titres : la carte s'agrandit pour les lister. */
+export function hasTracks(release) {
+  return (release.tracklist?.length ?? 0) > 1 || (release.tracks ?? 0) > 1;
+}
+
+/** Millisecondes → « 3:05 ». */
+export function formatDuration(ms) {
+  if (!ms) return "";
+  const seconds = Math.round(ms / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 /** Problèmes à signaler en haut de page : données périmées, source en panne ou partielle. */
 export function notices(data, now) {
   const limit = data.rules.stale_hours * HOUR_MS;

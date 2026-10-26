@@ -6,6 +6,9 @@ appel ; sinon on relit ses derniers sons et ses playlists (albums, EP, singles).
 
 Les genres sont ceux que l'artiste donne à chaque son ou playlist (genre et tags). Un compte
 dont des sons connus ont été lus avant leur collecte (25/10/2026) est relu une fois en entier.
+
+Les titres d'une playlist (lecture depuis la page) arrivent avec elle ; ceux des playlists lues
+avant le 26/10 sont lus une fois, un appel par playlist.
 """
 
 from __future__ import annotations
@@ -22,7 +25,7 @@ import httpx
 
 from newrel import dates, styles
 from newrel.http import HttpClient, HttpError, RateLimited, ensure_ok, json_body, mask
-from newrel.models import FollowedArtist, ItemArtist, ReleaseType, SourceItem
+from newrel.models import FollowedArtist, ItemArtist, ReleaseType, SourceItem, Track
 from newrel.sources.base import ArtistCheck, SourceContext, SourceResult, followings_guard
 
 PLATFORM = "soundcloud"
@@ -200,6 +203,22 @@ def release_type(value: str | None, tracks: int | None) -> ReleaseType | None:
     return None
 
 
+def tracklist(playlist: dict[str, Any]) -> list[Track]:
+    """Titres lisibles d'une playlist, dans l'ordre (les sons bloqués ou privés sont absents)."""
+    return [
+        Track(
+            platform=PLATFORM,
+            title=track.get("title") or "",
+            url=track["permalink_url"],
+            duration_ms=track.get("duration"),
+        )
+        for track in playlist.get("tracks") or []
+        if isinstance(track, dict)
+        and track.get("access") != "blocked"
+        and (track.get("permalink_url") or "").startswith("https://")
+    ]
+
+
 def playlist_to_item(playlist: dict[str, Any], tz: ZoneInfo) -> tuple[SourceItem | None, list[str]]:
     """Playlist → sortie (album, EP, single) et URN des sons qu'elle contient."""
     tracks = playlist.get("track_count")
@@ -231,6 +250,7 @@ def playlist_to_item(playlist: dict[str, Any], tz: ZoneInfo) -> tuple[SourceItem
         tracks=tracks,
         cover=cover,
         genres=_genres(playlist),
+        tracklist=tracklist(playlist),
     )
     return item, members
 
@@ -259,6 +279,7 @@ def collect(
         accounts, counts = _followings(api, ctx, result)
         if accounts:
             _catalog(api, ctx, result, accounts, counts, clock)
+        _tracklists(api, ctx, result)
     finally:
         result.calls = client.calls
         if http is None:
@@ -364,6 +385,21 @@ def _catalog(
             continue
         check.catalog_total = count
         result.checked[account.key] = check
+
+
+def _tracklists(api: SoundCloudApi, ctx: SourceContext, result: SourceResult) -> None:
+    """Titres des playlists connues qui n'en ont pas encore (lues avant le 26/10)."""
+    read = {item.key for check in result.checked.values() for item in check.items}
+    wanted = [key for key in ctx.tracklists_wanted if key not in read]
+    for key in wanted[: ctx.config.soundcloud.tracklist_calls]:
+        try:
+            playlist = api.get(f"/playlists/{key}", {"show_tracks": "true"})
+            result.tracklists[key] = tracklist(playlist)
+        except RateLimited:
+            return
+        except HttpError as exc:
+            if exc.status_code == 404:  # playlist supprimée
+                result.tracklists[key] = []
 
 
 def _full_check(api: SoundCloudApi, ctx: SourceContext, account: FollowedArtist) -> ArtistCheck:

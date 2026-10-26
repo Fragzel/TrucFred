@@ -9,6 +9,9 @@ un artiste que si son nombre total de sorties a augmenté (un seul appel sinon).
 
 Les genres viennent des artistes suivis (/me/following les donne sans appel catalogue) : Spotify
 n'en donne pas par album.
+
+Les titres des EP et albums (lecture depuis la page) coûtent un appel par album : chaque run en
+lit quelques-uns (tracklist_calls), une fois pour toutes, avant de vérifier les artistes.
 """
 
 from __future__ import annotations
@@ -23,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from newrel import dates, github, styles
 from newrel.http import AuthExpired, HttpClient, HttpError, RateLimited, ensure_ok, json_body, mask
-from newrel.models import FollowedArtist, ItemArtist, SourceItem
+from newrel.models import FollowedArtist, ItemArtist, SourceItem, Track
 from newrel.sources.base import ArtistCheck, SourceContext, SourceResult, followings_guard
 
 PLATFORM = "spotify"
@@ -102,12 +105,8 @@ class SpotifyApi:
                 return list(artists.values())
             params = {**params, "after": after}
 
-    def artist_albums(
-        self, artist_id: str, groups: str, market: str, offset: int, limit: int = PAGE_LIMIT
-    ) -> dict[str, Any]:
+    def catalog(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
         """Un appel catalogue, décompté du quota quotidien."""
-        path = f"/artists/{artist_id}/albums"
-        params = {"include_groups": groups, "market": market, "limit": limit, "offset": offset}
         self.catalog_calls += 1
         try:
             return self.get(path, self.app_token(), params)
@@ -116,6 +115,16 @@ class SpotifyApi:
                 raise
             self.catalog_calls += 1
             return self.get(path, self.app_token(renew=True), params)  # token d'application expiré
+
+    def artist_albums(
+        self, artist_id: str, groups: str, market: str, offset: int, limit: int = PAGE_LIMIT
+    ) -> dict[str, Any]:
+        params = {"include_groups": groups, "market": market, "limit": limit, "offset": offset}
+        return self.catalog(f"/artists/{artist_id}/albums", params)
+
+    def album(self, album_id: str, market: str) -> dict[str, Any]:
+        """Un album avec ses titres (jusqu'à 50 : assez pour un EP ou un album)."""
+        return self.catalog(f"/albums/{album_id}", {"market": market})
 
 
 def album_to_item(album: dict[str, Any]) -> SourceItem | None:
@@ -154,6 +163,22 @@ def album_to_item(album: dict[str, Any]) -> SourceItem | None:
         cover=_pick_cover(album.get("images") or []),
         genres=[],  # ceux de l'artiste suffisent
     )
+
+
+def album_tracks(album: dict[str, Any]) -> list[Track]:
+    """Titres d'un album Spotify, dans l'ordre."""
+    items = (album.get("tracks") or {}).get("items") or []
+    return [
+        Track(
+            platform=PLATFORM,
+            title=track.get("name") or "",
+            url=(track.get("external_urls") or {}).get("spotify")
+            or f"https://open.spotify.com/track/{track['id']}",
+            duration_ms=track.get("duration_ms"),
+        )
+        for track in items
+        if track and track.get("id")
+    ]
 
 
 def _pick_cover(images: list[dict[str, Any]]) -> str | None:
@@ -248,6 +273,7 @@ def _catalog(
     except HttpError as exc:
         result.degrade("error", f"jeton d'application indisponible ({exc})")
         return
+    _tracklists(api, ctx, result)
     queue = sorted(artists, key=lambda artist: _priority(artist, ctx))
     deadline = clock() + settings.time_budget_minutes * 60
     for index, artist in enumerate(queue):
@@ -277,6 +303,26 @@ def _catalog(
             result.pending = postponed
             return
         result.checked[artist.key] = check
+
+
+def _tracklists(api: SpotifyApi, ctx: SourceContext, result: SourceResult) -> None:
+    """Titres des EP et albums pas encore lus, les plus récents d'abord, sur un petit budget.
+
+    Un quota épuisé arrête la lecture : les artistes, juste après, en rendront compte.
+    """
+    settings = ctx.config.spotify
+    for key in ctx.tracklists_wanted[: settings.tracklist_calls]:
+        if api.catalog_calls >= settings.daily_catalog_calls:
+            return
+        try:
+            result.tracklists[key] = album_tracks(api.album(key.rsplit(":", 1)[1], settings.market))
+        except RateLimited:
+            return
+        except HttpError as exc:
+            if exc.status_code == 404:  # album retiré du catalogue
+                result.tracklists[key] = []
+            else:
+                result.warnings.append(f"Spotify : titres d'un album illisibles ({exc})")
 
 
 def _window_end(used_at: datetime | None, ctx: SourceContext) -> datetime | None:

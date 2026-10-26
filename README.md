@@ -167,6 +167,26 @@ l'étoile renvoie la sortie là où elle était : « Déjà vus » si elle avait
 - **Fusions** : quand deux sorties sont fusionnées (par exemple la même sortie trouvée sur deux
   plateformes), leurs marques suivent automatiquement, grâce aux `aliases` de `releases.json`.
 
+## Écouter depuis la page
+
+- **▶ sur la pochette** : la sortie se lance dans le lecteur fixé en bas de l'écran. La musique
+  continue pendant que tu changes d'onglet, filtres ou ranges des cartes ; ⏮ et ⏭ passent à la
+  sortie précédente ou suivante de la liste affichée, ✕ arrête.
+- **EP et albums** : ▶ (ou le lien « N titres ») agrandit la carte sur toute la largeur et liste
+  ses titres. « Tout lire » joue la sortie entière, un clic sur un titre joue ce titre.
+- **Plateformes** : ce sont les lecteurs officiels de Spotify, SoundCloud et YouTube, intégrés à
+  la page. SoundCloud puis YouTube passent en premier, car ils jouent les morceaux entiers sans
+  compte. Une sortie présente sur plusieurs plateformes propose de changer de lecteur.
+  - Spotify joue les morceaux entiers si tu es connecté à open.spotify.com dans ce navigateur,
+    sinon des extraits de 30 secondes. Il faut aussi cliquer sur son bouton lecture : il ne
+    démarre pas tout seul.
+  - Les lecteurs sont des iframes : isolés de la page, ils ne peuvent rien en lire, et aucun
+    script tiers n'y est chargé.
+- **Listes de titres** : celles des playlists SoundCloud arrivent avec elles. Spotify demande un
+  appel par album : chaque run en lit 10 (`tracklist_calls` de `[spotify]`), pris sur le quota du
+  jour avant les artistes, une fois pour toutes. Les EP déjà connus le 26/10 sont complétés en
+  une semaine environ ; d'ici là, « Tout lire » marche quand même.
+
 ## Notifications sur le téléphone
 
 Après chaque run qui trouve de vraies nouveautés, un message arrive sur ton téléphone via

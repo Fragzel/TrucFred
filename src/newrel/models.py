@@ -31,6 +31,15 @@ class ItemArtist(Model):
     name: str
 
 
+class Track(Model):
+    """Un titre d'EP ou d'album, jouable depuis la page."""
+
+    platform: Platform
+    title: str
+    url: str
+    duration_ms: int | None = None
+
+
 class SourceItem(Model):
     """Une sortie telle qu'une plateforme la décrit (un « lien » une fois stockée)."""
 
@@ -52,6 +61,9 @@ class SourceItem(Model):
     genres: list[str] | None = None
     """Genres de la sortie qui désignent un style (genre et tags SoundCloud, sujets et tags
     YouTube). None : lue avant le 25/10/2026, quand les genres n'étaient pas collectés."""
+    tracklist: list[Track] | None = None
+    """Titres d'un EP ou d'un album ; None tant qu'ils n'ont pas été lus (Spotify les lit à part,
+    sur une petite part du quota)."""
 
 
 class FollowedArtist(Model):
@@ -147,6 +159,8 @@ class Release(Model):
     tracks: int | None = None
     cover: Cover | None = None
     links: list[Link]
+    tracklist: list[Track] = Field(default_factory=list)
+    """Titres d'un EP ou d'un album, ceux de Spotify d'abord ; vide pour un titre seul."""
     styles: list[Style] = Field(default_factory=list)
     """Un ou deux styles, le principal d'abord ; vide quand aucune plateforme n'en dit rien."""
     genres: list[str] = Field(default_factory=list)

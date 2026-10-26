@@ -39,6 +39,7 @@
 
 body {
   margin: 0;
+  padding-bottom: var(--dock, 0px); /* le lecteur fixé en bas ne cache pas les dernières cartes */
   line-height: 1.45;
 }
 
@@ -534,7 +535,7 @@ h1 {
 
 .toast {
   position: fixed;
-  bottom: 1rem;
+  bottom: calc(var(--dock, 0px) + 1rem);
   left: 50%;
   display: flex;
   align-items: center;
@@ -636,4 +637,324 @@ h1 {
   padding-bottom: 2rem;
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+/* --- Lecture --- */
+
+.art {
+  position: relative;
+}
+
+.play {
+  position: absolute;
+  bottom: 0.4rem;
+  left: 0.4rem;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 35%);
+}
+
+.play[hidden] {
+  display: none;
+}
+
+.card.is-playing {
+  border-color: var(--accent);
+}
+
+.card.is-playing .play {
+  background: #fff;
+  color: #5b4cdb;
+}
+
+.show-tracks {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Carte agrandie : toute la largeur de la grille, pochette à gauche, titres à droite. */
+.card.is-open {
+  grid-column: 1 / -1;
+  flex-direction: row;
+}
+
+.card.is-open .art {
+  flex: 0 0 clamp(140px, 30%, 260px);
+}
+
+.card.is-open .body {
+  min-width: 0;
+}
+
+.tracklist-box {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.tracklist-box[hidden] {
+  display: none;
+}
+
+.tracklist-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.play-all {
+  padding: 0.3rem 0.8rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.tracklist {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: track;
+  columns: 2 18rem;
+  column-gap: 1.5rem;
+}
+
+.tracklist li {
+  break-inside: avoid;
+  counter-increment: track;
+}
+
+.track {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.track::before {
+  min-width: 1.4rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  content: counter(track);
+}
+
+.track:hover {
+  background: var(--bg);
+}
+
+.track:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.track[aria-current="true"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.track[aria-current="true"]::before {
+  color: var(--accent);
+  content: "♪";
+}
+
+.track-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-duration {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tracklist-empty {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Lecteur fixé en bas de l'écran, hors de la liste. */
+.player {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 -4px 16px rgb(0 0 0 / 15%);
+}
+
+.player[hidden] {
+  display: none;
+}
+
+.player-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.5rem 1rem;
+}
+
+.player-info {
+  display: flex;
+  flex: 1 1 14rem;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.player-cover {
+  flex: none;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.player-text {
+  min-width: 0;
+}
+
+.player-title,
+.player-subtitle {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.player-subtitle {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.player-controls,
+.player-platforms {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.player-platform {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.player-platform[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.player-button {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.player-frame {
+  flex: 1 1 20rem;
+  max-width: 480px;
+}
+
+.player-frame iframe {
+  display: block;
+  width: 100%;
+  height: 80px;
+  border: 0;
+  border-radius: 12px;
+}
+
+.player-frame[data-platform="soundcloud"] iframe {
+  height: 120px;
+  border-radius: 0;
+}
+
+/* YouTube exige un lecteur d'au moins 200 px de haut. */
+.player-frame[data-platform="youtube"] {
+  max-width: 356px;
+}
+
+.player-frame[data-platform="youtube"] iframe {
+  height: auto;
+  min-height: 200px;
+  aspect-ratio: 16 / 9;
+}
+
+.player-note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.player-note[hidden] {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .card.is-open {
+    flex-direction: column;
+  }
+
+  .card.is-open .art {
+    flex-basis: auto;
+  }
+
+  .player-cover {
+    display: none;
+  }
+
+  .player-info {
+    flex: 1 1 0;
+  }
+
+  .player-frame,
+  .player-frame[data-platform="youtube"] {
+    flex-basis: 100%;
+    max-width: none;
+  }
 }

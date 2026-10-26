@@ -73,6 +73,15 @@ def context_for(
             if name != platform
             for artist in other.followings
         ),
+        tracklists_wanted=tuple(
+            key
+            for key, link in sorted(
+                state.links.items(), key=lambda pair: pair[1].item.date, reverse=True
+            )
+            if key.startswith(prefix)
+            and (link.item.tracks or 0) > 1
+            and link.item.tracklist is None
+        ),
         stale_artists=frozenset(
             artist_key
             for key, link in state.links.items()
@@ -149,6 +158,8 @@ def apply_result(
                 if not dates.historical(item.date, item.precision, today, backfill, max_age_days):
                     stats.new_releases.append(item)
             else:
+                if item.tracklist is None and link.item.tracklist is not None:
+                    item = item.model_copy(update={"tracklist": link.item.tracklist})
                 link.item, link.last_seen = item, now
                 if artist_key not in link.via:
                     link.via.append(artist_key)
@@ -160,6 +171,9 @@ def apply_result(
             latest_release=check.latest_release,
             last_full_at=now if check.full else (known.last_full_at if known else None),
         )
+    for key, tracks in result.tracklists.items():
+        if link := state.links.get(key):
+            link.item.tracklist = tracks
     return stats
 
 

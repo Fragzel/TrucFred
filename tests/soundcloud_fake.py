@@ -100,6 +100,9 @@ class FakeSoundCloud:
         self.playlists_route = router.get(url__regex=rf"{API}/users/(?P<urn>[^/]+)/playlists").mock(
             side_effect=self._playlists
         )
+        self.playlist_route = router.get(url__regex=rf"{API}/playlists/(?P<urn>[^/?]+)").mock(
+            side_effect=self._playlist
+        )
 
     def follow(self, *users: dict[str, Any]) -> None:
         self.followed.extend(users)
@@ -147,3 +150,8 @@ class FakeSoundCloud:
 
     def _playlists(self, request: httpx.Request, urn: str) -> httpx.Response:
         return self._page(request, self.playlists[urn])
+
+    def _playlist(self, request: httpx.Request, urn: str) -> httpx.Response:
+        assert request.url.params["show_tracks"] == "true"
+        found = [p for playlists in self.playlists.values() for p in playlists if p["urn"] == urn]
+        return httpx.Response(200, json=found[0]) if found else httpx.Response(404)

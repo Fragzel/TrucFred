@@ -293,3 +293,26 @@ def test_budget_de_temps_reporte_les_artistes_restants(fake_spotify) -> None:
     result = spotify.collect(context, http=quick_http(), clock=lambda: next(ticks))
     assert result.status == "partial"
     assert list(result.checked) == ["spotify:artist:A1"]
+
+
+def test_titres_des_ep_lus_sur_un_petit_budget_avant_les_artistes(fake_spotify) -> None:
+    fake_spotify.follow(("A1", "Artiste 1"))
+    ep = album("e1", "Nuit", "2026-10-16", album_type="single", tracks=4)
+    fake_spotify.publish("A1", "single", ep, album("e2", "Jour", "2026-10-09", tracks=5))
+    config = replace(CONFIG, spotify=replace(CONFIG.spotify, tracklist_calls=1))
+    wanted = ("spotify:album:e1", "spotify:album:e2", "spotify:album:disparu")
+    result = collect_quickly(make_context(config=config, tracklists_wanted=wanted))
+    assert list(result.tracklists) == ["spotify:album:e1"]  # budget de 1 : le plus récent
+    tracks = result.tracklists["spotify:album:e1"]
+    assert [(t.title, t.url, t.duration_ms) for t in tracks][:2] == [
+        ("Nuit 1", "https://open.spotify.com/track/e1t1", 181_000),
+        ("Nuit 2", "https://open.spotify.com/track/e1t2", 182_000),
+    ]
+    assert len(tracks) == 4 and fake_spotify.album_route.call_count == 1
+    assert result.checked  # les artistes sont vérifiés ensuite, sur le reste du budget
+
+
+def test_album_retire_du_catalogue_titres_vides(fake_spotify) -> None:
+    fake_spotify.follow(("A1", "Artiste 1"))
+    result = collect_quickly(make_context(tracklists_wanted=("spotify:album:disparu",)))
+    assert result.tracklists == {"spotify:album:disparu": []}  # plus jamais redemandé

@@ -34,6 +34,9 @@ class SpotifyConfig:
     active_interval_days: float = 2.0
     dormant_interval_days: float = 7.0
     full_check_days: int = 30
+    tracklist_calls: int = 10
+    """Titres des EP et albums : un appel par album, pris sur le budget du jour avant les
+    artistes."""
 
 
 @dataclass(frozen=True)
@@ -47,6 +50,8 @@ class SoundCloudConfig:
     time_budget_minutes: float = 15.0
     max_retry_after_seconds: float = 120.0
     full_check_days: int = 30
+    tracklist_calls: int = 50
+    """Titres des playlists connues avant leur collecte : un appel par playlist, une seule fois."""
 
 
 @dataclass(frozen=True)

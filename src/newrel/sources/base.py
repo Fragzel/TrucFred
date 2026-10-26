@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from newrel.config import Config
-from newrel.models import ArtistState, FollowedArtist, SourceItem, Status
+from newrel.models import ArtistState, FollowedArtist, SourceItem, Status, Track
 
 SEVERITY: dict[Status, int] = {"ok": 0, "partial": 1, "error": 2, "auth_expired": 3}
 
@@ -29,6 +29,8 @@ class SourceContext:
     """Dernier run qui a interrogé le catalogue (début de la fenêtre de quota en cours)."""
     peer_names: frozenset[str] = frozenset()
     """Noms des artistes suivis sur les autres plateformes (indice pour le tri YouTube)."""
+    tracklists_wanted: tuple[str, ...] = ()
+    """EP et albums connus dont les titres n'ont pas encore été lus, les plus récents d'abord."""
     stale_artists: frozenset[str] = frozenset()
     """Artistes dont des sorties connues ont été lues avant la collecte des genres (SoundCloud
     les relit une fois en entier)."""
@@ -62,6 +64,8 @@ class SourceResult:
     """Renseigné quand ce run a interrogé le catalogue : la fenêtre de quota repart d'ici."""
     next_check_at: datetime | None = None
     """Moment où la source pourra de nouveau interroger son catalogue (None : à chaque run)."""
+    tracklists: dict[str, list[Track]] = field(default_factory=dict)
+    """Titres lus pendant ce run, par clé de lien (vide : sortie disparue ou sans titre lisible)."""
     warnings: list[str] = field(default_factory=list)
     calls: int = 0
 

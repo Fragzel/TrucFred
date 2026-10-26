@@ -4,10 +4,13 @@ import test from "node:test";
 import {
   ALL_ELECTRO,
   NO_STYLE,
+  embedUrl,
   emptyMarks,
   fold,
+  formatDuration,
   formatHash,
   groupByWeek,
+  hasTracks,
   hiddenAccounts,
   hiddenReleases,
   isNew,
@@ -19,6 +22,8 @@ import {
   notices,
   parseHash,
   parseMarks,
+  playableLinks,
+  playerSource,
   releaseWeek,
   releasesForTab,
   releasesShown,
@@ -295,4 +300,54 @@ test("bannières : données périmées et source en difficulté", () => {
   ]);
   const fresh = { ...data, generated_at: "2026-10-22T04:00:00Z", sources: {} };
   assert.deepEqual(notices(fresh, NOW), []);
+});
+
+test("lecteurs intégrés : adresses reconnues, le reste refusé", () => {
+  assert.equal(embedUrl("spotify", "https://open.spotify.com/album/7LC9ePeF5sz"), "https://open.spotify.com/embed/album/7LC9ePeF5sz");
+  assert.equal(embedUrl("spotify", "https://open.spotify.com/track/abc123"), "https://open.spotify.com/embed/track/abc123");
+  const sc = new URL(embedUrl("soundcloud", "https://soundcloud.com/nora/sets/echos"));
+  assert.equal(sc.origin + sc.pathname, "https://w.soundcloud.com/player/");
+  assert.equal(sc.searchParams.get("url"), "https://soundcloud.com/nora/sets/echos");
+  assert.equal(sc.searchParams.get("auto_play"), "true");
+  assert.equal(
+    embedUrl("youtube", "https://www.youtube.com/watch?v=4HjkTBd4bIE"),
+    "https://www.youtube-nocookie.com/embed/4HjkTBd4bIE?autoplay=1&rel=0&playsinline=1",
+  );
+  for (const [platform, url] of [
+    ["spotify", "https://evil.test/album/x"],
+    ["soundcloud", "http://soundcloud.com/nora/nuit"], // pas en https
+    ["youtube", "https://www.youtube.com/watch?v=\"><script>"],
+    ["youtube", "pas une adresse"],
+  ]) {
+    assert.equal(embedUrl(platform, url), null, url);
+  }
+});
+
+test("lecture : la plateforme des titres d'abord, sinon les morceaux entiers sans compte", () => {
+  const links = [
+    { platform: "spotify", url: "https://open.spotify.com/album/e1" },
+    { platform: "soundcloud", url: "https://soundcloud.com/nora/sets/echos" },
+    { platform: "youtube", url: "https://www.youtube.com/watch?v=4HjkTBd4bIE" },
+  ];
+  const single = release({ links });
+  assert.deepEqual(playableLinks(single).map((link) => link.platform), ["soundcloud", "youtube", "spotify"]);
+  const tracklist = [
+    { platform: "spotify", title: "Un", url: "https://open.spotify.com/track/t1", duration_ms: 185_000 },
+    { platform: "spotify", title: "Deux", url: "https://open.spotify.com/track/t2", duration_ms: 61_400 },
+  ];
+  const ep = release({ type: "ep", tracks: 2, links, tracklist });
+  assert.equal(playableLinks(ep)[0].platform, "spotify");
+  assert.equal(hasTracks(ep), true);
+  assert.equal(hasTracks(single), false);
+  assert.deepEqual(playerSource(ep, { platform: "soundcloud", track: null }), {
+    platform: "soundcloud",
+    src: embedUrl("soundcloud", "https://soundcloud.com/nora/sets/echos"),
+  });
+  assert.deepEqual(playerSource(ep, { platform: "soundcloud", track: 1 }), {
+    platform: "spotify",
+    src: "https://open.spotify.com/embed/track/t2",
+  });
+  const unplayable = release({ links: [{ platform: "spotify", url: "https://evil.test/x" }] });
+  assert.equal(playerSource(unplayable, { platform: null, track: null }), null);
+  assert.deepEqual([formatDuration(185_000), formatDuration(61_400), formatDuration(null)], ["3:05", "1:01", ""]);
 });

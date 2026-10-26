@@ -7,9 +7,12 @@ import {
   STYLE_LABELS,
   TYPE_LABELS,
   dayToUtc,
+  embedUrl,
   emptyMarks,
+  formatDuration,
   formatHash,
   groupByWeek,
+  hasTracks,
   hiddenAccounts,
   hiddenReleases,
   isNew,
@@ -20,6 +23,8 @@ import {
   notices,
   parseHash,
   parseMarks,
+  playableLinks,
+  playerSource,
   releasesForTab,
   releasesShown,
   styleCounts,
@@ -78,6 +83,9 @@ const page = {
   marks: emptyMarks(),
   visible: [],
   kept: new Set(), // sorties rangées ailleurs, gardées à leur place jusqu'au prochain onglet ou filtre
+  player: null, // { id, platform, track } : sortie jouée, plateforme, index du titre (null : tout)
+  open: null, // carte agrandie sur la liste de ses titres
+  order: [], // identifiants des cartes affichées, dans l'ordre : ⏮ et ⏭ du lecteur
 };
 const $ = (selector) => document.querySelector(selector);
 
@@ -480,7 +488,24 @@ function card(release, fresh, moved) {
   const date = node.querySelector(".date");
   date.textContent = releaseDate(release);
   date.dateTime = release.date;
-  if (release.tracks > 1) node.querySelector(".tracks").textContent = ` · ${plural(release.tracks, "titre")}`;
+  const open = page.open === release.id;
+  if (hasTracks(release)) {
+    const toggle = Object.assign(document.createElement("button"), {
+      type: "button",
+      className: "show-tracks",
+      textContent: plural(release.tracklist?.length || release.tracks, "titre"),
+    });
+    toggle.setAttribute("aria-expanded", String(open));
+    node.querySelector(".tracks").replaceChildren(document.createTextNode(" · "), toggle);
+  }
+  renderTracklist(node, release, open);
+  const playing = page.player?.id === release.id;
+  node.classList.toggle("is-playing", playing);
+  const play = node.querySelector(".play");
+  play.hidden = playableLinks(release).length === 0;
+  play.textContent = playing ? "♪" : "▶";
+  play.setAttribute("aria-label", playing ? `En cours : ${release.title}` : `Écouter « ${release.title} »`);
+  play.title = playing ? "En cours de lecture" : "Écouter ici";
   const links = node.querySelector(".links");
   for (const link of release.links) {
     const anchor = document.createElement("a");
@@ -513,6 +538,35 @@ function card(release, fresh, moved) {
   return node;
 }
 
+/** Carte agrandie : la liste de ses titres, chacun jouable. */
+function renderTracklist(node, release, open) {
+  node.classList.toggle("is-open", open);
+  const box = node.querySelector(".tracklist-box");
+  box.hidden = !open;
+  if (!open) return;
+  const tracks = release.tracklist ?? [];
+  const current = page.player?.id === release.id ? page.player.track : null;
+  box.querySelector(".tracklist").replaceChildren(
+    ...tracks.map((track, index) => {
+      const item = document.createElement("li");
+      const button = Object.assign(document.createElement("button"), { type: "button", className: "track" });
+      button.dataset.index = String(index);
+      if (index === current) button.setAttribute("aria-current", "true");
+      button.disabled = !embedUrl(track.platform, track.url);
+      const name = Object.assign(document.createElement("span"), { className: "track-title", textContent: track.title });
+      const length = Object.assign(document.createElement("span"), {
+        className: "track-duration",
+        textContent: formatDuration(track.duration_ms),
+      });
+      button.append(name, length);
+      button.setAttribute("aria-label", `Écouter « ${track.title} »`);
+      item.append(button);
+      return item;
+    }),
+  );
+  box.querySelector(".tracklist-empty").hidden = tracks.length > 0;
+}
+
 function renderTabs() {
   const counts = tabCounts(page.data.releases, page.marks);
   for (const button of document.querySelectorAll(".tab")) {
@@ -537,7 +591,9 @@ function render() {
   renderStyleMenu(pool.filter((release) => matches(release, { ...page.filters, style: null }, fresh)));
   renderTabs();
   const fragment = document.createDocumentFragment();
-  for (const { week, releases: items } of groupByWeek(shown)) {
+  const weeks = groupByWeek(shown);
+  page.order = weeks.flatMap((week) => week.releases.map((release) => release.id));
+  for (const { week, releases: items } of weeks) {
     const section = $("#tpl-week").content.firstElementChild.cloneNode(true);
     section.querySelector("h2").textContent = `Semaine du vendredi ${weekFormat.format(dayToUtc(week))}`;
     section.querySelector(".count").textContent = plural(items.length, "sortie");
@@ -563,6 +619,84 @@ function render() {
 }
 
 /** Sorties masquées, et comptes masqués avant le 26/10, avec un bouton pour les réafficher. */
+// --- Lecture -------------------------------------------------------------------------------------
+// Le lecteur reste en bas de l'écran, hors de la liste : changer d'onglet, filtrer ou ranger une carte
+// n'interrompt pas la musique (une iframe recréée ou déplacée repartirait de zéro).
+
+/** Joue une sortie entière (track null) ou l'un de ses titres. */
+function play(release, { platform = null, track = null } = {}) {
+  const links = playableLinks(release);
+  const link = links.find((candidate) => candidate.platform === platform) ?? links[0];
+  if (!link && track === null) return;
+  page.player = { id: release.id, platform: link?.platform ?? null, track };
+  renderPlayer();
+  render();
+}
+
+function stopPlayer() {
+  page.player = null;
+  renderPlayer();
+  render();
+}
+
+function renderPlayer() {
+  const dock = $("#player");
+  const frame = $("#player-frame");
+  const release = page.player && findRelease(page.player.id);
+  const source = release && playerSource(release, page.player);
+  if (!source?.src) {
+    dock.hidden = true;
+    frame.replaceChildren();
+    delete frame.dataset.src;
+    document.documentElement.style.removeProperty("--dock");
+    return;
+  }
+  const track = page.player.track === null ? null : release.tracklist[page.player.track];
+  const artists = release.artists.map((artist) => artist.name).join(", ");
+  $("#player-title").textContent = track ? track.title : release.title;
+  $("#player-subtitle").textContent = track ? `${artists} · ${release.title}` : artists;
+  const cover = $("#player-cover");
+  cover.hidden = !release.cover;
+  if (release.cover) cover.src = safeUrl(release.cover.url);
+  const links = track ? [] : playableLinks(release);
+  $("#player-platforms").replaceChildren(
+    ...(links.length > 1 ? links : []).map((link) => {
+      const button = Object.assign(document.createElement("button"), {
+        type: "button",
+        className: `player-platform platform-${link.platform}`,
+        textContent: PLATFORM_LABELS[link.platform],
+      });
+      button.dataset.platform = link.platform;
+      button.setAttribute("aria-pressed", String(link.platform === source.platform));
+      return button;
+    }),
+  );
+  $("#player-note").hidden = source.platform !== "spotify";
+  frame.dataset.platform = source.platform;
+  if (frame.dataset.src !== source.src) {
+    const iframe = Object.assign(document.createElement("iframe"), {
+      src: source.src,
+      title: `Lecteur ${PLATFORM_LABELS[source.platform]} : ${track ? track.title : release.title}`,
+      allow: "autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write",
+      referrerPolicy: "strict-origin-when-cross-origin", // YouTube refuse les intégrations sans origine
+    });
+    frame.replaceChildren(iframe);
+    frame.dataset.src = source.src;
+  }
+  dock.hidden = false;
+  document.documentElement.style.setProperty("--dock", `${dock.offsetHeight}px`);
+}
+
+/** ⏮ et ⏭ : sortie précédente ou suivante parmi les cartes affichées. */
+function playNeighbour(step) {
+  const index = page.order.indexOf(page.player?.id);
+  const id = page.order[index === -1 ? 0 : index + step];
+  const release = id && findRelease(id);
+  if (!release) return;
+  if (hasTracks(release)) page.open = release.id;
+  play(release);
+}
+
 function renderHidden() {
   const releases = hiddenReleases(page.data.releases, page.marks);
   const accounts = hiddenAccounts(page.data.releases, page.marks);
@@ -633,11 +767,17 @@ function findRelease(id) {
 }
 
 function onCardClick(event) {
-  const button = event.target.closest(".mark-seen, .mark-fav, .mark-hide");
+  const button = event.target.closest(
+    ".mark-seen, .mark-fav, .mark-hide, .play, .play-all, .track, .show-tracks, .close-tracks",
+  );
   // Second clic d'un double-clic : il annulerait le premier.
   if (!button || event.detail > 1) return;
   const release = findRelease(button.closest(".card").dataset.id);
   if (!release) return;
+  if (button.matches(".play, .play-all, .track, .show-tracks, .close-tracks")) {
+    onPlayClick(button, release);
+    return;
+  }
   if (button.classList.contains("mark-hide")) {
     const marks = toggleHiddenRelease(page.marks, release, new Date());
     const message = marks.hiddenReleases[release.id] ? "masquée" : "réaffichée";
@@ -660,6 +800,22 @@ function onCardClick(event) {
   const message = seen ? `« ${release.title} » remis dans « À découvrir ».` : `« ${release.title} » rangé dans « Déjà vus ».`;
   page.kept.add(release.id);
   applyMarks(toggleSeen(page.marks, release.id, new Date()), message);
+}
+
+function onPlayClick(button, release) {
+  if (button.matches(".show-tracks, .close-tracks")) {
+    page.open = page.open === release.id ? null : release.id;
+    render();
+  } else if (button.matches(".track")) {
+    const track = release.tracklist[Number(button.dataset.index)];
+    play(release, { platform: track.platform, track: Number(button.dataset.index) });
+  } else if (button.matches(".play") && page.player?.id === release.id) {
+    page.open = page.open === release.id || !hasTracks(release) ? null : release.id;
+    render(); // déjà en lecture : ▶ montre ou cache ses titres
+  } else {
+    if (hasTracks(release)) page.open = release.id;
+    play(release);
+  }
 }
 
 /** « Tout marquer comme vu » dans « À découvrir », « Tout remettre » dans « Déjà vus ». */
@@ -770,6 +926,17 @@ async function main() {
     button.addEventListener("keydown", onTabKey);
   }
   $("#list").addEventListener("click", onCardClick);
+  $("#player-close").addEventListener("click", stopPlayer);
+  $("#player-prev").addEventListener("click", () => playNeighbour(-1));
+  $("#player-next").addEventListener("click", () => playNeighbour(1));
+  $("#player-platforms").addEventListener("click", (event) => {
+    const button = event.target.closest(".player-platform");
+    const release = button && page.player && findRelease(page.player.id);
+    if (release) play(release, { platform: button.dataset.platform });
+  });
+  window.addEventListener("resize", () => {
+    if (page.player) document.documentElement.style.setProperty("--dock", `${$("#player").offsetHeight}px`);
+  });
   $("#hidden-list").addEventListener("click", (event) => {
     const button = event.target.closest(".unhide");
     if (!button) return;

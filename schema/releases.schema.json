@@ -197,6 +197,13 @@
           "title": "Links",
           "type": "array"
         },
+        "tracklist": {
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "title": "Tracklist",
+          "type": "array"
+        },
         "styles": {
           "items": {
             "enum": [
@@ -404,6 +411,48 @@
         }
       },
       "title": "SourceSummary",
+      "type": "object"
+    },
+    "Track": {
+      "additionalProperties": false,
+      "description": "Un titre d'EP ou d'album, jouable depuis la page.",
+      "properties": {
+        "platform": {
+          "enum": [
+            "spotify",
+            "soundcloud",
+            "youtube"
+          ],
+          "title": "Platform",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        }
+      },
+      "required": [
+        "platform",
+        "title",
+        "url"
+      ],
+      "title": "Track",
       "type": "object"
     }
   },

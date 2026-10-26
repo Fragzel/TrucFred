@@ -82,6 +82,13 @@
       "links": [
         {"platform": "spotify", "url": "https://open.spotify.com/album/0sampleBasseSaison", "type": "ep", "date": "2026-10-16", "precision": "day"}
       ],
+      "tracklist": [
+        {"platform": "spotify", "title": "Marée basse", "url": "https://open.spotify.com/track/0sampleBasse1", "duration_ms": 214000},
+        {"platform": "spotify", "title": "Ressac", "url": "https://open.spotify.com/track/0sampleBasse2", "duration_ms": 187000},
+        {"platform": "spotify", "title": "Estran", "url": "https://open.spotify.com/track/0sampleBasse3", "duration_ms": 243000},
+        {"platform": "spotify", "title": "Laisse de mer", "url": "https://open.spotify.com/track/0sampleBasse4", "duration_ms": 201000},
+        {"platform": "spotify", "title": "Morte-eau", "url": "https://open.spotify.com/track/0sampleBasse5", "duration_ms": 229000}
+      ],
       "styles": ["techno"],
       "genres": ["acid techno", "tekno"]
     },

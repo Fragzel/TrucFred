@@ -444,6 +444,17 @@ export function isSpotifyPreview(state, track = null) {
   return state.duration <= PREVIEW_MAX_SECONDS;
 }
 
+/** Pourquoi Spotify ne joue qu'un extrait dans la page, d'après le navigateur. Son lecteur intégré
+ * joue toujours des extraits sur téléphone et dans Safari, connecté ou non ; Firefox range ses
+ * cookies à part sur chaque site (protection totale contre les cookies) et lui cache la session ;
+ * ailleurs, la connexion manque ou les cookies tiers sont bloqués. */
+export function spotifyPreviewCause(userAgent = "") {
+  if (/Mobi|Android|iPhone|iPad|iPod/.test(userAgent)) return "mobile";
+  if (/Firefox\//.test(userAgent)) return "firefox";
+  if (/Safari\//.test(userAgent) && !/Chrome\/|Chromium\/|Edg\//.test(userAgent)) return "safari";
+  return "cookies";
+}
+
 /** Sortie à plusieurs titres : la carte s'agrandit pour les lister. */
 export function hasTracks(release) {
   return (release.tracklist?.length ?? 0) > 1 || (release.tracks ?? 0) > 1;

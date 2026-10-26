@@ -193,12 +193,19 @@ Un seul lecteur, le même pour Spotify, SoundCloud et YouTube, fixé en bas de l
   ses titres. « Tout lire » part du premier ; un clic sur un titre joue ce titre.
 - **Plateformes** : SoundCloud puis YouTube passent en premier, car ils jouent les morceaux
   entiers sans compte. Une sortie présente sur plusieurs plateformes propose « Lire sur … ».
-  - Spotify joue les morceaux entiers si tu es connecté à open.spotify.com dans ce navigateur,
-    sinon des extraits de 30 secondes. Sur un extrait (durée de 30 s environ, ou plus courte que
-    celle du titre), le lecteur propose « Se reconnecter à Spotify » : la connexion s'ouvre dans
-    un onglet, et le lecteur se recharge quand tu reviens sur la page. Si c'est toujours un
-    extrait, le navigateur bloque sans doute les cookies de Spotify sur les autres sites (Safari,
-    Firefox strict).
+  - Spotify joue les morceaux entiers si son lecteur intégré voit ta connexion à
+    open.spotify.com, sinon des extraits de 30 secondes : sans le cookie de session, sa page
+    arrive avec `"isAnonymous": true`. Sur un extrait (durée de 30 s environ, ou plus courte que
+    celle du titre), le lecteur dit pourquoi, selon le navigateur :
+    - **Firefox** range par défaut les cookies de Spotify à part sur chaque site (protection
+      totale contre les cookies) : connecté ou non, le lecteur intégré ne voit pas la session.
+      Bouclier à gauche de l'adresse, désactiver la protection pour ce site : la page se
+      recharge, et Spotify joue les titres entiers si tu es connecté dans Firefox.
+    - **Téléphone et Safari** : le lecteur intégré de Spotify n'y joue que des extraits, même
+      connecté. « Écouter sur Spotify » ouvre le titre entier.
+    - **Chrome, Edge** : « Se reconnecter à Spotify » ouvre la connexion dans un onglet, et le
+      lecteur se recharge quand tu reviens sur la page. Si c'est toujours un extrait, les cookies
+      tiers sont bloqués : les autoriser pour ce site.
   - YouTube : le son seul, vidéo cachée, à ta demande (26/10). Ses règles veulent la vidéo
     visible, sur au moins 200 × 200 px : YouTube pourrait un jour bloquer la lecture intégrée
     depuis la page. Pour revenir à une vidéo visible, voir `.player-media.is-video` dans

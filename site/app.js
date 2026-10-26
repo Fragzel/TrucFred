@@ -28,6 +28,7 @@ import {
   playerSource,
   releasesForTab,
   releasesShown,
+  spotifyPreviewCause,
   styleCounts,
   tabCounts,
   tabOf,
@@ -762,20 +763,32 @@ function onTriage(kind) {
   if (markRelease(release, kind)) playNeighbour(1);
 }
 
-/** Extrait de 30 s : Spotify ne reconnaît personne dans ce navigateur. Le bouton ouvre sa connexion
- * dans un onglet ; au retour sur la page, le lecteur Spotify est rechargé avec la session. */
+const FIREFOX_SHIELD = "clique sur le bouclier à gauche de l'adresse et désactive la protection pour ce site";
+const SPOTIFY_PREVIEW_NOTES = {
+  mobile: "Extrait de 30 s : sur téléphone, Spotify ne joue que des extraits dans une page. « Écouter sur Spotify » ouvre le titre entier.",
+  safari: "Extrait de 30 s : dans Safari, Spotify ne joue que des extraits dans une page. « Écouter sur Spotify » ouvre le titre entier.",
+  firefox: `Extrait de 30 s : Firefox cache ta session Spotify à cette page ; ${FIREFOX_SHIELD}.`,
+  cookies: "Extrait de 30 s : Spotify ne te reconnaît pas dans ce navigateur.",
+};
+const SPOTIFY_RETRIED_NOTES = {
+  firefox: `Toujours un extrait : ${FIREFOX_SHIELD}.`,
+  cookies:
+    "Toujours un extrait : es-tu bien connecté dans l'onglet Spotify ? Sinon, ce navigateur bloque les cookies tiers : autorise-les pour ce site dans ses réglages.",
+};
+
+/** Extrait de 30 s : la page dit pourquoi, selon le navigateur. Là où une connexion peut suffire,
+ * le bouton l'ouvre dans un onglet ; au retour sur la page, le lecteur Spotify est rechargé. */
 function renderSpotifyLogin(state) {
   const release = page.player && findRelease(page.player.id);
   const track = release && page.player.track !== null ? release.tracklist?.[page.player.track] : null;
   const preview = isSpotifyPreview(state, track);
-  $("#player-login").hidden = !preview;
+  const cause = spotifyPreviewCause(navigator.userAgent);
+  $("#player-login").hidden = !preview || !(cause in SPOTIFY_RETRIED_NOTES);
   const note = $("#player-note");
   note.hidden = !preview;
-  note.title = note.textContent;
   note.textContent =
-    page.spotifyLogin === "retried"
-      ? "Toujours un extrait : es-tu bien connecté dans l'onglet Spotify ? Sinon, ce navigateur bloque ses cookies sur les autres sites."
-      : "Extrait de 30 s : Spotify ne te reconnaît pas dans ce navigateur.";
+    (page.spotifyLogin === "retried" && SPOTIFY_RETRIED_NOTES[cause]) || SPOTIFY_PREVIEW_NOTES[cause];
+  note.title = note.textContent;
 }
 
 function onSpotifyReturn() {

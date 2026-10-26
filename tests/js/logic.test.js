@@ -28,6 +28,7 @@ import {
   releaseWeek,
   releasesForTab,
   releasesShown,
+  spotifyPreviewCause,
   styleCounts,
   tabCounts,
   tabOf,
@@ -365,4 +366,24 @@ test("extrait Spotify : 30 s, ou plus court que le titre quand on connaît sa du
   assert.equal(isSpotifyPreview(state("soundcloud", 30)), false);
   assert.equal(isSpotifyPreview(state("spotify", 25), { duration_ms: 26_000 }), false); // titre court
   assert.equal(isSpotifyPreview(state("spotify", 30), { duration_ms: 185_000 }), true);
+});
+
+test("cause d'un extrait Spotify d'après le navigateur", () => {
+  const ua = {
+    chrome: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+    edge: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0",
+    firefox: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0",
+    safari: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Safari/605.1.15",
+    iphone: "Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1",
+    android: "Mozilla/5.0 (Linux; Android 16; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36",
+    firefoxAndroid: "Mozilla/5.0 (Android 16; Mobile; rv:144.0) Gecko/144.0 Firefox/144.0",
+  };
+  assert.equal(spotifyPreviewCause(ua.chrome), "cookies");
+  assert.equal(spotifyPreviewCause(ua.edge), "cookies");
+  assert.equal(spotifyPreviewCause(ua.firefox), "firefox");
+  assert.equal(spotifyPreviewCause(ua.safari), "safari");
+  assert.equal(spotifyPreviewCause(ua.iphone), "mobile");
+  assert.equal(spotifyPreviewCause(ua.android), "mobile");
+  assert.equal(spotifyPreviewCause(ua.firefoxAndroid), "mobile");
+  assert.equal(spotifyPreviewCause(), "cookies");
 });

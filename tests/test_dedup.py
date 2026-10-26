@@ -28,6 +28,8 @@ SEEN = datetime(2026, 10, 22, tzinfo=UTC)
         ("Track - Single", "track", None),
         ("Hey (Radio Mix) (Live)", "heyradiomix", "Live"),
         ("Without You", "withoutyou", None),
+        ("Dirty Talk - VIP", "dirtytalk", "VIP"),
+        ("Song (Part 2)", "songpart2", None),  # pas un numéro de catalogue
     ],
 )
 def test_split_title(title: str, key: str, edition: str | None) -> None:
@@ -43,6 +45,7 @@ def link(
     tracks: int | None = 10,
     platform: str = "spotify",
     artist: str = "spotify:artist:A1",
+    name: str = "Artiste",
 ) -> LinkState:
     item = SourceItem(
         key=key,
@@ -51,7 +54,7 @@ def link(
         url=f"https://example.test/{key}",
         title=title,
         type=kind,
-        artists=[ItemArtist(key=artist, name="Artiste")],
+        artists=[ItemArtist(key=artist, name=name)],
         date=day,
         precision="day",
         tracks=tracks,
@@ -98,7 +101,7 @@ def test_regles_entre_plateformes() -> None:
         platform="soundcloud",
     )
     links = {"spotify:album:a": album_, "spotify:album:s": single, "soundcloud:tracks:t": track}
-    # Le son SoundCloud rejoint le single (±7 jours) mais pas l'album (nombre de titres différent).
+    # Le son SoundCloud rejoint le single mais pas l'album (nombre de titres différent).
     assert sorted(cluster(links)) == [
         ["soundcloud:tracks:t", "spotify:album:s"],
         ["spotify:album:a"],
@@ -112,6 +115,13 @@ def test_regles_entre_plateformes() -> None:
         ("NORA VELASCO – Lumières froides [Free DL]", ["Nora Velasco Official"], "lumieresfroides"),
         ("Lumières froides (Clip officiel)", [], "lumieresfroides"),
         ("Autre Artiste - Lumières froides", ["Nora Velasco"], "autreartistelumieresfroides"),
+        ("H4RD - Ankhra (Original Mix) #FREEDOWNLOAD", ["H4RD"], "ankhra"),
+        ("Dekarah - OUT NOW on @PhantomUnitRec", ["Quartzo"], "dekarah"),
+        ("DJ Susan & SQWAD - Gold Chain [HP340]", ["DJ Susan"], "goldchain"),
+        ("Coco Bryce - Our Darkness EP", ["Coco Bryce"], "ourdarkness"),
+        ("Van der Wiese Dub Tapes", ["Van der Wiese"], "dubtapes"),
+        ("PREMIERE: Babylon [Full EP]", [], "babylon"),
+        ("Tout va passer ft. Céline", [], "toutvapasser"),
     ],
 )
 def test_titres_soundcloud(title: str, names: list[str], key: str) -> None:
@@ -217,3 +227,122 @@ def test_clip_rejoint_le_single_et_les_autres_videos_du_titre() -> None:
         ["spotify:album:s", "youtube:video:c", "youtube:video:l"],
         ["youtube:video:x"],
     ]
+
+
+def sc_track(key: str, title: str, day: str, uploader: str, name: str) -> LinkState:
+    return link(
+        key, title, day, kind="track", tracks=1, platform="soundcloud", artist=uploader, name=name
+    )
+
+
+def test_son_publie_par_un_label_credite_l_artiste_nomme() -> None:
+    links = {
+        "spotify:album:s": link(
+            "spotify:album:s",
+            "Call Me Master",
+            "2026-10-16",
+            kind="single",
+            tracks=1,
+            name="Hellfish",
+        ),
+        "soundcloud:tracks:l": sc_track(
+            "soundcloud:tracks:l",
+            "Hellfish - Call Me Master",
+            "2026-10-15",
+            "soundcloud:users:9",
+            "PRSPCT Recordings",
+        ),
+    }
+    assert cluster(links) == [["soundcloud:tracks:l", "spotify:album:s"]]
+
+
+def test_deux_labels_creditent_le_meme_artiste_meme_inconnu() -> None:
+    links = {
+        "soundcloud:tracks:a": sc_track(
+            "soundcloud:tracks:a",
+            "Catalyst - The 6th Sense",
+            "2026-10-01",
+            "soundcloud:users:1",
+            "Milleville Music",
+        ),
+        "youtube:video:b": link(
+            "youtube:video:b",
+            "Catalyst - The 6th Sense",
+            "2026-10-19",
+            kind="video",
+            tracks=None,
+            platform="youtube",
+            artist="youtube:channel:UC2",
+            name="Accelerant",
+        ),
+    }
+    assert len(cluster(links)) == 1
+
+
+def test_titres_banals_d_un_meme_label_jamais_reunis() -> None:
+    links = {
+        "soundcloud:tracks:a": sc_track(
+            "soundcloud:tracks:a", "Kid - Intro", "2026-10-01", "soundcloud:users:9", "Label"
+        ),
+        "youtube:video:b": link(
+            "youtube:video:b",
+            "Nora - Intro",
+            "2026-10-02",
+            kind="video",
+            tracks=None,
+            platform="youtube",
+            artist="youtube:channel:UC9",
+            name="Label",
+        ),
+    }
+    # Le label est le même artiste sur les deux plateformes, mais les titres créditent Kid et Nora.
+    canonical = canonical_artists({"soundcloud:users:9": "Label", "youtube:channel:UC9": "Label"})
+    assert len(cluster(links, canonical)) == 2
+
+
+def test_ep_de_remixes_et_ses_remixes_publies_a_part() -> None:
+    def remix(n: str, title: str) -> LinkState:
+        return sc_track(
+            f"soundcloud:tracks:{n}", title, "2026-10-02", "soundcloud:users:1", "Artiste"
+        )
+
+    links = {
+        "spotify:album:e": link(
+            "spotify:album:e", "Sands (Remixes)", "2026-10-16", kind="ep", tracks=8
+        ),
+        "soundcloud:tracks:1": remix("1", "Sands (AMSON Remix)"),
+        "soundcloud:tracks:2": remix("2", "Sands (Ginio Remix)"),
+        "soundcloud:tracks:3": remix("3", "Sands"),  # l'original : une autre sortie
+    }
+    assert sorted(
+        cluster(
+            links,
+            canonical_artists({"spotify:artist:A1": "Artiste", "soundcloud:users:1": "Artiste"}),
+        )
+    ) == [
+        ["soundcloud:tracks:1", "soundcloud:tracks:2", "spotify:album:e"],
+        ["soundcloud:tracks:3"],
+    ]
+
+
+@pytest.mark.parametrize(("day", "merged"), [("2026-08-20", True), ("2026-08-01", False)])
+def test_tolerance_de_soixante_jours_entre_plateformes(day: str, merged: bool) -> None:
+    links = {
+        "spotify:album:s": link("spotify:album:s", "Nuit", "2026-10-16", kind="single", tracks=1),
+        "soundcloud:tracks:t": sc_track(
+            "soundcloud:tracks:t", "Nuit", day, "soundcloud:users:1", "Artiste"
+        ),
+    }
+    canonical = canonical_artists({"spotify:artist:A1": "Artiste", "soundcloud:users:1": "Artiste"})
+    assert (len(cluster(links, canonical)) == 1) is merged
+
+
+def test_videos_d_une_meme_chaine_toujours_a_sept_jours() -> None:
+    def video(key: str, day: str) -> LinkState:
+        return link(key, "Nuit", day, kind="video", tracks=None, platform="youtube")
+
+    links = {
+        "youtube:video:a": video("youtube:video:a", "2026-10-01"),
+        "youtube:video:b": video("youtube:video:b", "2026-10-12"),
+    }
+    assert len(cluster(links)) == 2

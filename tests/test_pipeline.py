@@ -403,3 +403,19 @@ def test_etat_d_avant_les_genres_relu_une_seule_fois(tmp_path, fake_soundcloud) 
     assert by_title(tmp_path)["Nuit"]["styles"] == ["hardcore"]
     run(tmp_path, env=SC_ENV, now=NOW + 2 * DAY)
     assert fake_soundcloud.catalog_calls == calls + 2  # plus rien à relire
+
+
+def test_son_d_un_label_rejoint_la_sortie_spotify_de_l_artiste(
+    tmp_path, fake_spotify, fake_soundcloud
+) -> None:
+    fake_spotify.follow(("A1", "Hellfish"))
+    single = album("s1", "Call Me Master", "2026-10-16", artists=(("A1", "Hellfish"),))
+    fake_spotify.publish("A1", "single", single)
+    label = sc_user(20, "PRSPCT Recordings", permalink="prspct")
+    fake_soundcloud.follow(label)
+    title = "Hellfish - Call Me Master (Original Mix) [PRSPCT300]"
+    fake_soundcloud.upload(label, sc_track(7, title, "2026/09/20 10:00:00 +0000", label))
+    run(tmp_path, env=ENV | SC_ENV)
+    [release] = published(tmp_path)["releases"]
+    assert [link["platform"] for link in release["links"]] == ["spotify", "soundcloud"]
+    assert [artist["name"] for artist in release["artists"]] == ["Hellfish"]  # pas le label

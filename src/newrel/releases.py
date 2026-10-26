@@ -176,12 +176,14 @@ def _release(
         )
     )
     artists: dict[str, Artist] = {}
+    # Spotify crédite ses artistes : le label ou la chaîne qui publie ailleurs n'en est pas un.
+    for link in ranked[:1] if primary.platform == "spotify" else ranked:
+        for artist in link.item.artists:
+            artist_id = canonical.get(artist.key) or dedup.artist_id(artist.key)
+            artists.setdefault(artist_id, Artist(id=artist_id, name=artist.name))
     per_platform: dict[str, Link] = {}
     for link in ranked:
         item = link.item
-        for artist in item.artists:
-            artist_id = canonical.get(artist.key) or dedup.artist_id(artist.key)
-            artists.setdefault(artist_id, Artist(id=artist_id, name=artist.name))
         per_platform.setdefault(
             item.platform,
             Link(

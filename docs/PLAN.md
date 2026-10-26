@@ -292,18 +292,21 @@ Artistes :
 - Le fichier `aliases.toml`, versionné, l'emporte toujours : il force des fusions par identifiant de plateforme et liste les paires à ne jamais fusionner (`never_merge`).
 
 Sorties (comparées seulement entre artistes fusionnés) :
-- Titre normalisé : on retire `(feat. …)`, `(prod. …)`, ` - Single`, ` - EP`, `[Free DL]`, le préfixe « Artiste - » (fréquent sur SoundCloud) et la ponctuation.
+- Titre normalisé : on retire `(feat. …)`, `(prod. …)`, ` - Single`, ` - EP`, `[Free DL]`, le préfixe « Artiste - » (fréquent sur SoundCloud) et la ponctuation. Depuis le 26/10 aussi : mentions promo, `(Original Mix)`, `[Full EP]`, `#hashtags`, numéros de catalogue, « ft. … » et « EP » en fin de titre.
+- Sur SoundCloud et YouTube, « Artiste - Titre » crédite l'artiste nommé, même quand un label publie (26/10, à ta demande : beaucoup de doublons venaient des labels). Deux titres crédités doivent créditer un même artiste.
 - Les étiquettes d'édition (deluxe, remaster, live, remix, sped up, instrumental, etc.) vont dans le champ `edition`. Une édition donne une carte séparée ; le lien vers l'originale (`parent`) viendra avec l'étape 2.
 - Dates compatibles :
-  - deux dates au jour près : écart de 7 jours au plus ;
-  - une date au jour et une période : la date tombe dans la période, à 7 jours près.
+  - entre plateformes, deux dates au jour près : écart de 60 jours au plus (7 jusqu'au 26/10 : un son SoundCloud ou un clip sort souvent des semaines avant ou après) ;
+  - sur YouTube, entre clip, audio et lyric video : 7 jours ;
+  - une date au jour et une période : la date tombe dans la période, à la même tolérance près.
+- Un EP de remixes regroupe les remixes publiés un par un sur une autre plateforme.
 - Types compatibles :
   - un single, un EP et un son unique peuvent fusionner entre eux ;
   - un album ne fusionne avec une autre sortie que si le nombre de titres est identique, pour ne pas le confondre avec son single titre.
 - Au sein de Spotify seul, on fusionne les versions explicit et clean d'une même sortie (même titre, même date, même nombre de titres).
 - La carte fusionnée garde :
   - la date de Spotify si elle est précise au jour : un son publié la veille sur SoundCloud ne doit pas faire changer de semaine une sortie du vendredi. Sinon, la plus précise, ou la plus ancienne à précision égale ;
-  - le titre et la pochette de Spotify par défaut ;
+  - le titre, la pochette et les artistes de Spotify par défaut (pas le label qui publie ailleurs) ;
   - les liens de toutes les plateformes.
 
 ### 2.6 Stockage de l'état : la branche `data`

@@ -115,7 +115,8 @@ de promo.
   en affiche la liste à part, avec les @handles : une chaîne trop prolifique s'écarte dans
   `ignore` de `youtube.toml`.
   - Leurs vidéos gardent leur titre complet (« Artiste - Morceau ») et sont attribuées à la
-    chaîne : elles ne fusionnent pas avec la même sortie publiée sur Spotify par l'artiste.
+    chaîne. L'artiste nommé en tête du titre compte pour les doublons : la vidéo rejoint la même
+    sortie publiée par l'artiste sur Spotify ou SoundCloud.
 - **Chaînes douteuses** : elles ne sont pas suivies. Le run affiche « N chaîne(s) à trier » ;
   `uv run newrel triage youtube` te les présente une par une (sujets, raison, derniers titres ;
   `v` ouvre la chaîne). Tes réponses vont dans `youtube.toml`, qu'il faut commiter et pousser.
@@ -191,12 +192,22 @@ la page.
 ## Doublons entre plateformes
 
 - **Une seule carte.** Une sortie présente sur plusieurs plateformes n'occupe qu'une carte, avec
-  un lien par plateforme. Il faut pour cela le même artiste, le même titre normalisé et des dates
-  proches de 7 jours au plus. Le clip, l'audio et la lyric video d'un même titre sur YouTube se
-  regroupent aussi.
+  un lien par plateforme. Il faut pour cela le même artiste, le même titre normalisé et la même
+  édition, à 60 jours près : un son SoundCloud ou un clip sort souvent des semaines avant ou
+  après la sortie officielle. Le clip, l'audio et la lyric video d'un même titre sur YouTube se
+  regroupent aussi, à 7 jours près.
 - **Titres.** La normalisation retire un préfixe « Artiste - » (ou « Artiste ft. Invité - »),
   ainsi que les mentions comme `[Free DL]`, `(Clip officiel)`, `(Official Music Video)`,
-  `| 4K` ou `(feat. …)`. Sur YouTube, le titre affiché est nettoyé de la même façon.
+  `(Original Mix)`, `[Full EP]`, « OUT NOW on @label », les `#hashtags`, les numéros de catalogue
+  (`[HP340]`), `| 4K`, `(feat. …)` ou « ft. … » en fin de titre, et « EP » final. Sur YouTube, le
+  titre affiché est nettoyé de la même façon.
+- **Labels.** Sur SoundCloud et YouTube, « Artiste - Titre » crédite l'artiste nommé, même
+  publié par un label (« Hellfish - Call Me Master » chez PRSPCT rejoint l'album de Hellfish).
+  Deux titres qui créditent chacun quelqu'un doivent créditer le même artiste : deux « Intro »
+  d'un même label restent séparées. Sur une carte qui a un lien Spotify, seuls les artistes de
+  Spotify s'affichent, pas le label.
+- **Remixes.** Un EP de remixes (« Titre (Remixes) ») regroupe les remixes publiés un par un sur
+  une autre plateforme. Un remix, une version VIP ou live reste sinon une sortie à part.
 - **Date affichée.** C'est celle de Spotify quand elle est précise au jour.
 - **Artistes.** Un même nom normalisé sur plusieurs plateformes désigne le même artiste :
   « Nora Velasco Official » sur SoundCloud, « NoraVelascoVEVO » sur YouTube et « Nora Velasco »

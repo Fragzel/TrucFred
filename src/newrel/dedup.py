@@ -4,9 +4,13 @@
   sauf homonymie (plusieurs comptes de même nom sur une plateforme) ; aliases.toml tranche à la
   main. Exception : sur YouTube, la chaîne principale et sa chaîne VEVO ou « - Topic » sont un
   seul artiste.
-- Sorties : même artiste, même titre normalisé, même édition, dates à ±7 jours et types
+- Sorties : même artiste, même titre normalisé, même édition, dates proches et types
   compatibles. Sur une même plateforme, seuls les jumeaux explicit / clean fusionnent, et sur
-  YouTube les vidéos d'un même titre (clip, audio, lyric video).
+  YouTube les vidéos d'un même titre (clip, audio, lyric video) à ±7 jours. Entre plateformes,
+  ±60 jours : un son SoundCloud ou un clip sort souvent des semaines avant ou après.
+- Titres SoundCloud et YouTube : « Artiste - Titre » crédite l'artiste nommé, même quand c'est un
+  label qui publie. Deux titres crédités doivent créditer un même artiste.
+- Un EP de remixes regroupe ses remixes publiés un par un sur une autre plateforme.
 """
 
 from __future__ import annotations
@@ -24,6 +28,11 @@ from newrel.config import Aliases
 from newrel.models import LinkState
 
 TOLERANCE = timedelta(days=7)
+"""Sur une même plateforme : clip, audio et lyric video d'un même titre sur YouTube."""
+CROSS_TOLERANCE = timedelta(days=60)
+"""Entre plateformes : un son SoundCloud ou un clip sort souvent des semaines avant ou après."""
+CREDIT_PLATFORMS = frozenset({"soundcloud", "youtube"})
+"""Titres écrits par qui publie : « Artiste - Titre » y crédite l'artiste, même chez un label."""
 SHORT_TYPES = frozenset({"single", "ep", "track", "video"})
 PLATFORM_ORDER = ("spotify", "soundcloud", "youtube")
 SAME_NAME_PLATFORMS = frozenset({"youtube"})
@@ -38,12 +47,22 @@ _CREDIT_SPLIT = re.compile(r"\s*(?:,|&|\+|\b(?:feat|ft|featuring|x|et|and|with|a
 _NOISE_WORD = r"(official|officiel|officielle|music|musical|hd|hq|uhd|4k|8k|lyrics?|paroles)"
 _NOISE = re.compile(
     r"^(free\s*(dl|download)|out now|premiere|official|officiel|officielle|hd|hq|uhd|4k|8k"
+    r"|original\s+mix|full\s+(ep|album)"
     rf"|({_NOISE_WORD}\s+)*(video|clip|audio|lyrics?|paroles|visuali[sz]er|mv|m/v)"
     rf"(\s+{_NOISE_WORD})*)$"
 )
+# Mentions promotionnelles : « OUT NOW on @Label », « exclusive to patreon », « Premiere I … ».
+_PROMO = re.compile(r"^(out now|free\s*(dl|download)|premiere|exclusive|available now)\b")
+# Numéro de catalogue d'un label : [HP340], [MOK350], [VDR037]… (pas « Pt2 » ni « Vol3 »).
+_CATALOG = re.compile(r"^(?!(pt|part|vol|ch)\d)(?=.*\d)(?=.*[a-z])[a-z0-9]{3,10}$")
+_LEAD_PROMO = re.compile(r"^\s*(premiere|exclusive|out now)\s*[:|]\s*", re.IGNORECASE)
+_LEAD_BRACKET = re.compile(r"^\s*[\(\[]([^\)\]]*)[\)\]]\s*")
+_HASHTAG = re.compile(r"\s*#[^\W\d_]\w*")
+_TRAILING_CREDIT = re.compile(r"\s+(feat|ft|featuring)\b\.?\s.*$", re.IGNORECASE)
+_TRAILING_FORMAT = re.compile(r"\s+(ep|lp)\s*$", re.IGNORECASE)
 _EDITION = re.compile(
     r"\b(deluxe|remaster\w*|anniversary|live|remix\w*|sped up|slowed|instrumental\w*"
-    r"|acoustic|extended|edition|version)\b"
+    r"|acoustic|extended|edition|version|rework|bootleg|vip|edit|rmx)\b"
 )
 _ARTIST_NOISE = ("official", "officiel", "music", "musique", "vevo")
 
@@ -86,6 +105,20 @@ def artist_name_key(name: str) -> str:
     return key
 
 
+def _ignorable(segment: str) -> bool:
+    """Mention sans rapport avec l'identité du titre : « Clip officiel », « Free DL », [HP340]…"""
+    folded = fold(segment).strip()
+    return bool(_NOISE.match(folded) or _PROMO.match(folded) or _CATALOG.match(compact(folded)))
+
+
+def _prepared(title: str) -> str:
+    """Retire ce qui précède le titre sans le nommer : « PREMIERE: », « [MOK350] », #hashtags."""
+    text = _HASHTAG.sub("", _LEAD_PROMO.sub("", title))
+    while (lead := _LEAD_BRACKET.match(text)) and _ignorable(lead.group(1)):
+        text = text[lead.end() :]
+    return text
+
+
 def split_prefix(title: str) -> tuple[list[str], str] | None:
     """« Artiste ft. Invité - Titre » → (["Artiste ft. Invité", "artiste", "invite"], "Titre").
 
@@ -95,7 +128,7 @@ def split_prefix(title: str) -> tuple[list[str], str] | None:
     if not (prefix := _DASH_PREFIX.match(title)):
         return None
     rest = fold(prefix.group(2)).strip()
-    if rest in {"single", "ep"} or _NOISE.match(rest):
+    if rest in {"single", "ep"} or _ignorable(rest):
         return None
     whole = prefix.group(1).strip()
     credited = [part for part in _CREDIT_SPLIT.split(fold(whole)) if part.strip()]
@@ -114,7 +147,7 @@ def _without_artist_prefix(title: str, artist_names: Iterable[str]) -> str:
 def _without_noise_suffixes(text: str) -> str:
     """Retire les mentions finales « | Clip officiel » des titres YouTube."""
     while (suffix := _PIPE_SUFFIX.search(text)) and (
-        not suffix.group(1).strip() or _NOISE.match(fold(suffix.group(1)).strip())
+        not suffix.group(1).strip() or _ignorable(suffix.group(1))
     ):
         text = text[: suffix.start()]
     return text
@@ -125,26 +158,38 @@ def clean_title(title: str, artist_names: Iterable[str] = ()) -> str:
     text = _without_noise_suffixes(_without_artist_prefix(title, artist_names))
 
     def keep(match: re.Match[str]) -> str:
-        return "" if _NOISE.match(fold(match.group(1)).strip()) else match.group(0)
+        return "" if _ignorable(match.group(1)) else match.group(0)
 
     text = re.sub(r"\s+", " ", _BRACKETS.sub(keep, text)).strip()
-    if (suffix := _DASH_SUFFIX.search(text)) and _NOISE.match(fold(suffix.group(1)).strip()):
+    if (suffix := _DASH_SUFFIX.search(text)) and _ignorable(suffix.group(1)):
         text = text[: suffix.start()].strip()
     return text or title.strip()
+
+
+def _without_leading_name(text: str, artist_names: Iterable[str]) -> str:
+    """« Van der Wiese Dub Tapes » → « Dub Tapes » : le nom de l'artiste en tête, sans tiret."""
+    words = fold(text).split()
+    for name in artist_names:
+        lead = fold(name).split()
+        if len(compact(name)) >= 3 and len(words) > len(lead) and words[: len(lead)] == lead:
+            return " ".join(text.split()[len(lead) :])
+    return text
 
 
 def split_title(title: str, artist_names: Iterable[str] = ()) -> tuple[str, str | None]:
     """Clé de titre et édition : « Album (Deluxe Edition) » → ("album", "Deluxe Edition").
 
     Le préfixe « Artiste - » courant sur SoundCloud et YouTube est retiré quand il nomme un des
-    artistes.
+    artistes, comme les mentions qui ne nomment pas le titre (promo, catalogue, « feat. »).
     """
+    artist_names = list(artist_names)
     editions: list[str] = []
-    text = _without_noise_suffixes(_without_artist_prefix(title, artist_names))
+    text = _without_noise_suffixes(_without_artist_prefix(_prepared(title), artist_names))
+    text = _without_leading_name(text, artist_names)
 
     def keep_or_extract(segment: str) -> str:
         folded = fold(segment).strip()
-        if _CREDIT.match(folded) or _NOISE.match(folded):
+        if _CREDIT.match(folded) or _ignorable(folded):
             return " "
         if _EDITION.search(folded):
             editions.append(segment.strip())
@@ -154,12 +199,22 @@ def split_title(title: str, artist_names: Iterable[str] = ()) -> tuple[str, str 
     text = _BRACKETS.sub(lambda match: keep_or_extract(match.group(1)), text)
     if suffix := _DASH_SUFFIX.search(text):
         folded = fold(suffix.group(1)).strip()
-        if folded in {"single", "ep"} or _CREDIT.match(folded) or _NOISE.match(folded):
+        if folded in {"single", "ep"} or _CREDIT.match(folded) or _ignorable(folded):
             text = text[: suffix.start()]
         elif _EDITION.search(folded):
             editions.append(suffix.group(1).strip())
             text = text[: suffix.start()]
+    text = _TRAILING_FORMAT.sub("", _TRAILING_CREDIT.sub("", text))  # « Titre ft. X », « Titre EP »
     return compact(text) or compact(title), " · ".join(editions) or None
+
+
+def credited_names(title: str) -> list[str]:
+    """Artistes nommés par « Artiste - Titre » (SoundCloud, YouTube) ; rien quand la suite n'est
+    qu'une édition (« Titre - Remix ») : le tiret sépare alors le titre de sa version."""
+    parts = split_prefix(_prepared(title))
+    if not parts or (_EDITION.search(fold(parts[1])) and len(parts[1].split()) <= 3):
+        return []
+    return parts[0]
 
 
 def _platform(artist_key: str) -> str:
@@ -231,6 +286,8 @@ class _View:
     title_key: str
     edition_key: str
     artists: frozenset[str]
+    credited: frozenset[str]
+    """Artistes nommés en tête du titre (« Artiste - Titre »), connus ou non."""
     type: str
     tracks: int | None
     date: str
@@ -239,18 +296,28 @@ class _View:
     end: date
 
     @classmethod
-    def of(cls, key: str, link: LinkState, canonical: Mapping[str, str]) -> _View:
+    def of(
+        cls, key: str, link: LinkState, canonical: Mapping[str, str], named: Mapping[str, str]
+    ) -> _View:
         item = link.item
-        title_key, edition = split_title(item.title, (artist.name for artist in item.artists))
+        names = [artist.name for artist in item.artists]
+        prefix = credited_names(item.title) if item.platform in CREDIT_PLATFORMS else []
+        # Un nom inconnu reste un artiste : deux labels qui publient « Catalyst - X » s'accordent.
+        credited = frozenset(
+            named.get(name_key) or artist_id(f"name:{name_key}")
+            for name in prefix[1:]
+            if (name_key := artist_name_key(name))
+        )
+        title_key, edition = split_title(item.title, [*names, *prefix])
         start, end = dates.bounds(item.date, item.precision)
+        own = frozenset(canonical.get(a.key) or artist_id(a.key) for a in item.artists)
         return cls(
             key=key,
             platform=item.platform,
             title_key=title_key,
             edition_key=compact(edition or ""),
-            artists=frozenset(
-                canonical.get(artist.key) or artist_id(artist.key) for artist in item.artists
-            ),
+            artists=own | credited,
+            credited=credited,
             type=item.type,
             tracks=item.tracks,
             date=item.date,
@@ -260,8 +327,30 @@ class _View:
         )
 
 
+def _shared_artist(a: _View, b: _View) -> bool:
+    """Deux titres crédités doivent nommer un même artiste : sinon deux sorties d'un même label
+    au titre banal (« Intro ») fusionneraient par le label."""
+    if a.credited and b.credited:
+        return bool(a.credited & b.credited)
+    return bool(a.artists & b.artists)
+
+
+def _same_edition(a: _View, b: _View) -> bool:
+    """Même édition, ou un EP de remixes et l'un de ses remixes publié à part ailleurs."""
+    if a.edition_key == b.edition_key:
+        return True
+    pack, single = (a, b) if a.edition_key.endswith("remixes") else (b, a)
+    return (
+        a.platform != b.platform
+        and pack.edition_key.endswith("remixes")
+        and single.edition_key.endswith("remix")
+        and (pack.tracks or 0) > 1
+        and (single.tracks or 1) == 1
+    )
+
+
 def _same_release(a: _View, b: _View) -> bool:
-    if a.title_key != b.title_key or a.edition_key != b.edition_key or not a.artists & b.artists:
+    if a.title_key != b.title_key or not _shared_artist(a, b) or not _same_edition(a, b):
         return False
     if a.platform == b.platform:
         if a.type == b.type == "video":
@@ -273,7 +362,7 @@ def _same_release(a: _View, b: _View) -> bool:
         close_tracks = a.tracks is None or b.tracks is None or abs(a.tracks - b.tracks) <= 1
         dates_ok = a.start.year == b.start.year and close_tracks
     else:
-        dates_ok = a.start - TOLERANCE <= b.end and b.start - TOLERANCE <= a.end
+        dates_ok = a.start - CROSS_TOLERANCE <= b.end and b.start - CROSS_TOLERANCE <= a.end
     # Un album ne fusionne qu'à nombre de titres égal : pas avec son single titre.
     short = a.type in SHORT_TYPES and b.type in SHORT_TYPES
     return dates_ok and (short or (a.tracks is not None and a.tracks == b.tracks))
@@ -283,7 +372,15 @@ def cluster(
     links: Mapping[str, LinkState], canonical: Mapping[str, str] | None = None
 ) -> list[list[str]]:
     """Regroupe les clés de liens qui désignent la même sortie (union-find, déterministe)."""
-    views = [_View.of(key, link, canonical or {}) for key, link in sorted(links.items())]
+    canonical = canonical or {}
+    # Nom normalisé → artiste, pour reconnaître « Hellfish - Titre » publié par un label.
+    by_name: dict[str, set[str]] = defaultdict(set)
+    for link in links.values():
+        for artist in link.item.artists:
+            if name_key := artist_name_key(artist.name):
+                by_name[name_key].add(canonical.get(artist.key) or artist_id(artist.key))
+    named = {name_key: next(iter(ids)) for name_key, ids in by_name.items() if len(ids) == 1}
+    views = [_View.of(key, link, canonical, named) for key, link in sorted(links.items())]
     parent = {view.key: view.key for view in views}
 
     def root(key: str) -> str:

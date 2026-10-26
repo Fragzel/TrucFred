@@ -309,10 +309,10 @@ test("lecteurs intégrés : adresses reconnues, le reste refusé", () => {
   assert.equal(sc.origin + sc.pathname, "https://w.soundcloud.com/player/");
   assert.equal(sc.searchParams.get("url"), "https://soundcloud.com/nora/sets/echos");
   assert.equal(sc.searchParams.get("auto_play"), "true");
-  assert.equal(
-    embedUrl("youtube", "https://www.youtube.com/watch?v=4HjkTBd4bIE"),
-    "https://www.youtube-nocookie.com/embed/4HjkTBd4bIE?autoplay=1&rel=0&playsinline=1",
-  );
+  const yt = new URL(embedUrl("youtube", "https://www.youtube.com/watch?v=4HjkTBd4bIE", "https://fragzel.github.io"));
+  assert.equal(yt.origin + yt.pathname, "https://www.youtube-nocookie.com/embed/4HjkTBd4bIE");
+  assert.equal(yt.searchParams.get("enablejsapi"), "1"); // pilotable par messages…
+  assert.equal(yt.searchParams.get("origin"), "https://fragzel.github.io"); // … depuis cette page
   for (const [platform, url] of [
     ["spotify", "https://evil.test/album/x"],
     ["soundcloud", "http://soundcloud.com/nora/nuit"], // pas en https
@@ -341,10 +341,12 @@ test("lecture : la plateforme des titres d'abord, sinon les morceaux entiers san
   assert.equal(hasTracks(single), false);
   assert.deepEqual(playerSource(ep, { platform: "soundcloud", track: null }), {
     platform: "soundcloud",
+    url: "https://soundcloud.com/nora/sets/echos",
     src: embedUrl("soundcloud", "https://soundcloud.com/nora/sets/echos"),
   });
   assert.deepEqual(playerSource(ep, { platform: "soundcloud", track: 1 }), {
     platform: "spotify",
+    url: "https://open.spotify.com/track/t2",
     src: "https://open.spotify.com/embed/track/t2",
   });
   const unplayable = release({ links: [{ platform: "spotify", url: "https://evil.test/x" }] });

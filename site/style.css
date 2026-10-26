@@ -798,7 +798,7 @@ h1 {
   font-size: 0.85rem;
 }
 
-/* Lecteur fixé en bas de l'écran, hors de la liste. */
+/* Lecteur unique, fixé en bas de l'écran : une seule interface pour les trois plateformes. */
 .player {
   position: fixed;
   right: 0;
@@ -816,29 +816,86 @@ h1 {
 
 .player-inner {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem 1rem;
+  gap: 0.6rem 1rem;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0.5rem 1rem;
+  padding: 0.6rem 1rem;
 }
 
-.player-info {
-  display: flex;
-  flex: 1 1 14rem;
-  align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
+/* Le lecteur de la plateforme tourne sous la pochette : présent et actif, mais caché. */
+.player-media {
+  position: relative;
+  flex: none;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--line);
+}
+
+.player-frame,
+.player-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.player-frame iframe {
+  pointer-events: none;
 }
 
 .player-cover {
-  flex: none;
-  border-radius: 6px;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
+.player-cover[hidden] {
+  display: none;
+}
+
+/* YouTube exige que sa vidéo reste visible, sur au moins 200 px de haut. */
+.player-media.is-video {
+  width: 356px;
+  height: 200px;
+  background: #000;
+}
+
+/* Lecteur muet (il n'a pas répondu) : montré tel quel, avec ses propres commandes. */
+.player-media.is-native {
+  width: min(480px, 45vw);
+  height: 166px;
+}
+
+.player-media:is(.is-video, .is-native) .player-cover {
+  display: none;
+}
+
+.player-media:is(.is-video, .is-native) iframe {
+  pointer-events: auto;
+}
+
+.player-main {
+  display: grid;
+  flex: 1;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.player-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .player-text {
+  flex: 1;
   min-width: 0;
 }
 
@@ -851,7 +908,7 @@ h1 {
 }
 
 .player-title {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 600;
 }
 
@@ -860,33 +917,16 @@ h1 {
   font-size: 0.8rem;
 }
 
-.player-controls,
-.player-platforms {
+.player-controls {
   display: flex;
-  flex-wrap: wrap;
+  flex: none;
   align-items: center;
   gap: 0.35rem;
 }
 
-.player-platform {
-  padding: 0.2rem 0.6rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.78rem;
-  cursor: pointer;
-}
-
-.player-platform[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
 .player-button {
-  width: 2rem;
-  height: 2rem;
+  width: 2.1rem;
+  height: 2.1rem;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: none;
@@ -895,46 +935,71 @@ h1 {
   cursor: pointer;
 }
 
-.player-frame {
-  flex: 1 1 20rem;
-  max-width: 480px;
-}
-
-.player-frame iframe {
-  display: block;
-  width: 100%;
-  height: 80px;
+.player-toggle {
+  width: 2.6rem;
+  height: 2.6rem;
   border: 0;
-  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.95rem;
 }
 
-/* SoundCloud : sa forme d'onde, cliquable, sert à naviguer dans le morceau ; on la veut large. */
-.player-frame[data-platform="soundcloud"] {
-  flex-basis: 30rem;
-  max-width: 640px;
+.player-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.player-frame[data-platform="soundcloud"] iframe {
-  height: 166px;
-  border-radius: 0;
+.player-seek {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
-/* YouTube exige un lecteur d'au moins 200 px de haut. */
-.player-frame[data-platform="youtube"] {
-  max-width: 356px;
+.player-seek:disabled {
+  cursor: default;
 }
 
-.player-frame[data-platform="youtube"] iframe {
-  height: auto;
-  min-height: 200px;
-  aspect-ratio: 16 / 9;
+.player-time {
+  min-width: 2.8rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.player-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.75rem;
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.player-source {
+  color: var(--muted);
+}
+
+.player-platforms {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.player-platform {
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
 }
 
 .player-note {
-  flex-basis: 100%;
-  margin: 0;
   color: var(--muted);
-  font-size: 0.75rem;
 }
 
 .player-note[hidden] {
@@ -950,22 +1015,24 @@ h1 {
     flex-basis: auto;
   }
 
-  .player-cover {
-    display: none;
+  .player-inner {
+    flex-wrap: wrap;
   }
 
-  .player-info {
-    flex: 1 1 0;
+  .player-media {
+    width: 56px;
+    height: 56px;
   }
 
-  .player-frame,
-  .player-frame[data-platform="youtube"],
-  .player-frame[data-platform="soundcloud"] {
+  .player-media:is(.is-video, .is-native) {
     flex-basis: 100%;
-    max-width: none;
+    width: 100%;
+    height: auto;
+    min-height: 200px;
+    aspect-ratio: 16 / 9;
   }
 
-  .player-frame[data-platform="soundcloud"] iframe {
-    height: 130px;
+  .player-head {
+    flex-wrap: wrap;
   }
 }

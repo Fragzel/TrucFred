@@ -35,6 +35,7 @@ import {
   toggleHiddenRelease,
   toggleSeen,
 } from "./logic.js";
+import { createPlayer } from "./player.js";
 import { deriveKey, isSealed, unseal } from "./vault.js";
 
 // Logos (Simple Icons, CC0) affichés avec chaque lien, conformément aux règles d'attribution.
@@ -86,6 +87,7 @@ const page = {
   player: null, // { id, platform, track } : sortie jouée, plateforme, index du titre (null : tout)
   open: null, // carte agrandie sur la liste de ses titres
   order: [], // identifiants des cartes affichées, dans l'ordre : ⏮ et ⏭ du lecteur
+  seeking: false, // la barre de progression est en train d'être glissée
 };
 const $ = (selector) => document.querySelector(selector);
 
@@ -499,13 +501,10 @@ function card(release, fresh, moved) {
     node.querySelector(".tracks").replaceChildren(document.createTextNode(" · "), toggle);
   }
   renderTracklist(node, release, open);
-  const playing = page.player?.id === release.id;
-  node.classList.toggle("is-playing", playing);
+  node.classList.toggle("is-playing", page.player?.id === release.id);
   const play = node.querySelector(".play");
   play.hidden = playableLinks(release).length === 0;
-  play.textContent = playing ? "♪" : "▶";
-  play.setAttribute("aria-label", playing ? `En cours : ${release.title}` : `Écouter « ${release.title} »`);
-  play.title = playing ? "En cours de lecture" : "Écouter ici";
+  renderPlayButton(play, release);
   const links = node.querySelector(".links");
   for (const link of release.links) {
     const anchor = document.createElement("a");
@@ -620,74 +619,128 @@ function render() {
 
 /** Sorties masquées, et comptes masqués avant le 26/10, avec un bouton pour les réafficher. */
 // --- Lecture -------------------------------------------------------------------------------------
-// Le lecteur reste en bas de l'écran, hors de la liste : changer d'onglet, filtrer ou ranger une carte
-// n'interrompt pas la musique (une iframe recréée ou déplacée repartirait de zéro).
+// Un seul lecteur pour les trois plateformes, en bas de l'écran et hors de la liste : changer
+// d'onglet, filtrer ou ranger une carte n'interrompt pas la musique. Le lecteur de la plateforme est
+// piloté par messages (player.js) ; seule la vidéo YouTube reste visible, YouTube l'exige.
 
-/** Joue une sortie entière (track null) ou l'un de ses titres. */
+const player = createPlayer($("#player-frame"), onPlayerChange);
+const clock = (seconds) => formatDuration(seconds * 1000) || "0:00";
+
+/** Joue une sortie, ou l'un de ses titres. Avec des titres connus, « tout » commence au premier :
+ * la page les enchaîne elle-même, avec une barre de progression par titre. */
 function play(release, { platform = null, track = null } = {}) {
   const links = playableLinks(release);
+  const first = track === null && !platform && release.tracklist?.length > 1 ? 0 : track;
   const link = links.find((candidate) => candidate.platform === platform) ?? links[0];
-  if (!link && track === null) return;
-  page.player = { id: release.id, platform: link?.platform ?? null, track };
+  if (!link && first === null) return;
+  page.player = { id: release.id, platform: link?.platform ?? null, track: first };
   renderPlayer();
   render();
 }
 
 function stopPlayer() {
   page.player = null;
+  player.stop();
   renderPlayer();
   render();
 }
 
 function renderPlayer() {
   const dock = $("#player");
-  const frame = $("#player-frame");
   const release = page.player && findRelease(page.player.id);
-  const source = release && playerSource(release, page.player);
+  const source = release && playerSource(release, page.player, location.origin);
   if (!source?.src) {
     dock.hidden = true;
-    frame.replaceChildren();
-    delete frame.dataset.src;
+    player.stop();
     document.documentElement.style.removeProperty("--dock");
     return;
   }
   const track = page.player.track === null ? null : release.tracklist[page.player.track];
   const artists = release.artists.map((artist) => artist.name).join(", ");
-  $("#player-title").textContent = track ? track.title : release.title;
+  const title = track ? track.title : release.title;
+  $("#player-title").textContent = title;
   $("#player-subtitle").textContent = track ? `${artists} · ${release.title}` : artists;
   const cover = $("#player-cover");
   cover.hidden = !release.cover;
   if (release.cover) cover.src = safeUrl(release.cover.url);
+  $("#player-media").classList.toggle("is-video", source.platform === "youtube");
+  const name = PLATFORM_LABELS[source.platform];
+  Object.assign($("#player-source"), { href: safeUrl(source.url), textContent: `Écouter sur ${name}` });
   const links = track ? [] : playableLinks(release);
   $("#player-platforms").replaceChildren(
-    ...(links.length > 1 ? links : []).map((link) => {
+    ...(links.length > 1 ? links.filter((link) => link.platform !== source.platform) : []).map((link) => {
       const button = Object.assign(document.createElement("button"), {
         type: "button",
-        className: `player-platform platform-${link.platform}`,
-        textContent: PLATFORM_LABELS[link.platform],
+        className: "player-platform",
+        textContent: `Lire sur ${PLATFORM_LABELS[link.platform]}`,
       });
       button.dataset.platform = link.platform;
-      button.setAttribute("aria-pressed", String(link.platform === source.platform));
       return button;
     }),
   );
-  $("#player-note").hidden = source.platform !== "spotify";
-  frame.dataset.platform = source.platform;
-  if (frame.dataset.src !== source.src) {
-    const iframe = Object.assign(document.createElement("iframe"), {
-      src: source.src,
-      title: `Lecteur ${PLATFORM_LABELS[source.platform]} : ${track ? track.title : release.title}`,
-      allow: "autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write",
-      referrerPolicy: "strict-origin-when-cross-origin", // YouTube refuse les intégrations sans origine
-    });
-    frame.replaceChildren(iframe);
-    frame.dataset.src = source.src;
+  const note = $("#player-note");
+  note.hidden = source.platform !== "spotify";
+  note.textContent = "Spotify : morceaux entiers si tu es connecté à open.spotify.com, sinon extraits de 30 s.";
+  if (player.state?.src !== source.src) {
+    player.load({ platform: source.platform, src: source.src, title: `Lecteur ${name} : ${title}` });
   }
   dock.hidden = false;
   document.documentElement.style.setProperty("--dock", `${dock.offsetHeight}px`);
 }
 
-/** ⏮ et ⏭ : sortie précédente ou suivante parmi les cartes affichées. */
+/** État du lecteur de la plateforme : bouton lecture, barre de progression, fin du titre. */
+function onPlayerChange(state) {
+  const playing = state.playing;
+  const toggle = $("#player-toggle");
+  toggle.textContent = playing ? "❚❚" : "▶";
+  toggle.setAttribute("aria-label", playing ? "Pause" : "Lecture");
+  toggle.title = toggle.getAttribute("aria-label");
+  const seek = $("#player-seek");
+  seek.disabled = !(state.duration > 0) || state.failed;
+  if (!page.seeking) {
+    seek.value = String(state.duration > 0 ? Math.round((state.position / state.duration) * 1000) : 0);
+    $("#player-position").textContent = clock(state.position);
+  }
+  $("#player-duration").textContent = clock(state.duration);
+  // Lecteur muet : on le montre tel quel, avec ses propres commandes.
+  $("#player-media").classList.toggle("is-native", state.failed);
+  const release = page.player && findRelease(page.player.id);
+  const button = release && $(`.card[data-id="${release.id}"] .play`);
+  if (button) renderPlayButton(button, release);
+  if (state.ended && release) playNext({ ended: true });
+  document.documentElement.style.setProperty("--dock", `${$("#player").offsetHeight}px`);
+}
+
+/** ▶ d'une carte : lecture, ou pause et reprise pour la sortie en cours. */
+function renderPlayButton(button, release) {
+  const current = page.player?.id === release.id;
+  const playing = current && player.state?.playing;
+  button.textContent = playing ? "❚❚" : "▶";
+  const label = playing ? "Mettre en pause" : current ? "Reprendre" : `Écouter « ${release.title} »`;
+  button.setAttribute("aria-label", label);
+  button.title = playing ? "Pause" : "Écouter ici";
+}
+
+/** ⏭, ou fin d'un titre : titre suivant de la sortie, sinon sortie suivante de la liste. Une sortie
+ * jouée d'un bloc (playlist SoundCloud, album Spotify) enchaîne seule ses titres : on la laisse finir. */
+function playNext({ ended = false } = {}) {
+  const release = findRelease(page.player.id);
+  const { track } = page.player;
+  if (track !== null && release.tracklist?.[track + 1]) play(release, { track: track + 1 });
+  else if (ended && track === null && hasTracks(release)) return;
+  else playNeighbour(1);
+}
+
+/** ⏮ : début du titre après 3 secondes, sinon titre précédent, sinon sortie précédente. */
+function playPrevious() {
+  const release = findRelease(page.player.id);
+  const { track } = page.player;
+  if ((player.state?.position ?? 0) > 3) player.seek(0);
+  else if (track > 0) play(release, { track: track - 1 });
+  else playNeighbour(-1);
+}
+
+/** Sortie précédente ou suivante parmi les cartes affichées. */
 function playNeighbour(step) {
   const index = page.order.indexOf(page.player?.id);
   const id = page.order[index === -1 ? 0 : index + step];
@@ -810,8 +863,7 @@ function onPlayClick(button, release) {
     const track = release.tracklist[Number(button.dataset.index)];
     play(release, { platform: track.platform, track: Number(button.dataset.index) });
   } else if (button.matches(".play") && page.player?.id === release.id) {
-    page.open = page.open === release.id || !hasTracks(release) ? null : release.id;
-    render(); // déjà en lecture : ▶ montre ou cache ses titres
+    player.toggle(); // la sortie en cours : pause ou reprise
   } else {
     if (hasTracks(release)) page.open = release.id;
     play(release);
@@ -927,8 +979,19 @@ async function main() {
   }
   $("#list").addEventListener("click", onCardClick);
   $("#player-close").addEventListener("click", stopPlayer);
-  $("#player-prev").addEventListener("click", () => playNeighbour(-1));
-  $("#player-next").addEventListener("click", () => playNeighbour(1));
+  $("#player-toggle").addEventListener("click", () => player.toggle());
+  $("#player-prev").addEventListener("click", playPrevious);
+  $("#player-next").addEventListener("click", () => playNext());
+  const seek = $("#player-seek");
+  // Pendant qu'on glisse, la barre suit le doigt ; le lecteur ne saute qu'au lâcher.
+  seek.addEventListener("input", () => {
+    page.seeking = true;
+    $("#player-position").textContent = clock((Number(seek.value) / 1000) * (player.state?.duration ?? 0));
+  });
+  seek.addEventListener("change", () => {
+    page.seeking = false;
+    player.seek((Number(seek.value) / 1000) * (player.state?.duration ?? 0));
+  });
   $("#player-platforms").addEventListener("click", (event) => {
     const button = event.target.closest(".player-platform");
     const release = button && page.player && findRelease(page.player.id);

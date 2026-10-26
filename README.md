@@ -83,7 +83,7 @@ Tests et qualité :
 
 ```
 uv run pytest
-node --test tests/js/logic.test.js tests/js/vault.test.js
+node --test tests/js/logic.test.js tests/js/vault.test.js tests/js/player.test.js
 uv run ruff check
 uv run ruff format
 ```
@@ -169,28 +169,32 @@ l'étoile renvoie la sortie là où elle était : « Déjà vus » si elle avait
 
 ## Écouter depuis la page
 
-- **▶ sur la pochette** : la sortie se lance dans le lecteur fixé en bas de l'écran. La musique
-  continue pendant que tu changes d'onglet, filtres ou ranges des cartes ; ⏮ et ⏭ passent à la
-  sortie précédente ou suivante de la liste affichée, ✕ arrête.
-- **EP et albums** : ▶ (ou le lien « N titres ») agrandit la carte sur toute la largeur et liste
-  ses titres. « Tout lire » joue la sortie entière, un clic sur un titre joue ce titre.
-- **Plateformes** : ce sont les lecteurs officiels de Spotify, SoundCloud et YouTube, intégrés à
-  la page. SoundCloud puis YouTube passent en premier, car ils jouent les morceaux entiers sans
-  compte. Une sortie présente sur plusieurs plateformes propose de changer de lecteur.
+Un seul lecteur, le même pour Spotify, SoundCloud et YouTube, fixé en bas de l'écran.
+
+- **▶ sur la pochette** lance la sortie ; sur la sortie en cours, il met en pause ou reprend. La
+  musique continue pendant que tu changes d'onglet, filtres ou ranges des cartes.
+- **Commandes** : ▶ / ❚❚, ⏮ (début du titre, ou titre précédent), ⏭ (titre ou sortie suivante),
+  ✕ pour arrêter, et une barre de progression : un clic ou un glissé saute à cet endroit.
+- **Enchaînement** : à la fin d'un titre, le lecteur passe au suivant de l'EP, puis à la sortie
+  suivante de la liste affichée.
+- **EP et albums** : ▶, ou le lien « N titres », agrandit la carte sur toute la largeur et liste
+  ses titres. « Tout lire » part du premier ; un clic sur un titre joue ce titre.
+- **Plateformes** : SoundCloud puis YouTube passent en premier, car ils jouent les morceaux
+  entiers sans compte. Une sortie présente sur plusieurs plateformes propose « Lire sur … ».
   - Spotify joue les morceaux entiers si tu es connecté à open.spotify.com dans ce navigateur,
-    sinon des extraits de 30 secondes. Il faut aussi cliquer sur son bouton lecture : il ne
-    démarre pas tout seul.
-  - Les lecteurs sont des iframes : isolés de la page, ils ne peuvent rien en lire, et aucun
-    script tiers n'y est chargé.
-- **Naviguer dans un morceau** : le lecteur SoundCloud affiche la forme d'onde sur toute sa
-  largeur, et un clic dessus saute à cet endroit. YouTube a sa barre de progression ; Spotify n'en
-  propose pas dans son lecteur compact. Un vrai spectre en direct est impossible : le son est
-  joué par le lecteur de la plateforme, que la page ne peut pas écouter, et Spotify a fermé son
-  API d'analyse audio fin 2024.
+    sinon des extraits de 30 secondes.
+  - YouTube exige que sa vidéo reste visible : elle remplace la pochette, sur 200 px de haut.
+- **Comment c'est fait** (`site/player.js`) : le lecteur officiel de la plateforme est chargé dans
+  une iframe, cachée sous la pochette, et piloté par messages, comme le font les bibliothèques
+  officielles, mais sans charger leurs scripts : la page n'exécute que son propre code.
+  - Si un lecteur ne répond pas au bout de 10 secondes, il apparaît tel quel, avec ses propres
+    commandes.
+  - Pas de spectre en direct : le son est joué par le lecteur de la plateforme, que la page ne
+    peut pas écouter, et Spotify a fermé son API d'analyse audio fin 2024.
 - **Listes de titres** : celles des playlists SoundCloud arrivent avec elles. Spotify demande un
   appel par album : chaque run en lit 10 (`tracklist_calls` de `[spotify]`), pris sur le quota du
   jour avant les artistes, une fois pour toutes. Les EP déjà connus le 26/10 sont complétés en
-  une semaine environ ; d'ici là, « Tout lire » marche quand même.
+  une semaine environ ; d'ici là, « Tout lire » joue la sortie d'un bloc.
 
 ## Notifications sur le téléphone
 

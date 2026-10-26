@@ -84,21 +84,35 @@
 
     <aside id="player" class="player" aria-label="Lecteur" hidden>
       <div class="player-inner">
-        <div class="player-info">
-          <img id="player-cover" class="player-cover" alt="" width="48" height="48" hidden>
-          <div class="player-text">
-            <p id="player-title" class="player-title"></p>
-            <p id="player-subtitle" class="player-subtitle"></p>
+        <!-- Le lecteur de la plateforme est chargé sous la pochette ; la vidéo YouTube reste visible. -->
+        <div id="player-media" class="player-media">
+          <div id="player-frame" class="player-frame"></div>
+          <img id="player-cover" class="player-cover" alt="">
+        </div>
+        <div class="player-main">
+          <div class="player-head">
+            <div class="player-text">
+              <p id="player-title" class="player-title"></p>
+              <p id="player-subtitle" class="player-subtitle"></p>
+            </div>
+            <div class="player-controls">
+              <button id="player-prev" type="button" class="player-button" aria-label="Précédent" title="Précédent">⏮</button>
+              <button id="player-toggle" type="button" class="player-button player-toggle" aria-label="Lecture" title="Lecture">▶</button>
+              <button id="player-next" type="button" class="player-button" aria-label="Suivant" title="Suivant">⏭</button>
+              <button id="player-close" type="button" class="player-button" aria-label="Fermer le lecteur" title="Fermer le lecteur">✕</button>
+            </div>
           </div>
+          <div class="player-progress">
+            <span id="player-position" class="player-time">0:00</span>
+            <input id="player-seek" class="player-seek" type="range" min="0" max="1000" step="1" value="0" aria-label="Position dans le morceau" disabled>
+            <span id="player-duration" class="player-time">0:00</span>
+          </div>
+          <p class="player-foot">
+            <a id="player-source" class="player-source" target="_blank" rel="noopener"></a>
+            <span id="player-platforms" class="player-platforms"></span>
+            <span id="player-note" class="player-note" hidden></span>
+          </p>
         </div>
-        <div class="player-controls">
-          <span id="player-platforms" class="player-platforms"></span>
-          <button id="player-prev" type="button" class="player-button" aria-label="Sortie précédente" title="Sortie précédente">⏮</button>
-          <button id="player-next" type="button" class="player-button" aria-label="Sortie suivante" title="Sortie suivante">⏭</button>
-          <button id="player-close" type="button" class="player-button" aria-label="Fermer le lecteur" title="Fermer le lecteur">✕</button>
-        </div>
-        <div id="player-frame" class="player-frame"></div>
-        <p id="player-note" class="player-note" hidden>Spotify : morceaux entiers si tu es connecté à open.spotify.com dans ce navigateur, sinon extraits de 30 s.</p>
       </div>
     </aside>
 

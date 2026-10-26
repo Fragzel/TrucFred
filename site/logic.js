@@ -377,8 +377,9 @@ export function tabCounts(releases, marks) {
 /** Morceaux entiers sans compte d'abord : Spotify ne joue que des extraits hors connexion. */
 const PLAY_ORDER = ["soundcloud", "youtube", "spotify"];
 
-/** Adresse du lecteur intégré d'un lien (sortie ou titre) ; null si l'adresse n'est pas reconnue. */
-export function embedUrl(platform, url) {
+/** Adresse du lecteur intégré d'un lien (sortie ou titre) ; null si l'adresse n'est pas reconnue.
+ * `origin` : celle de la page, que YouTube exige pour accepter d'être piloté par messages. */
+export function embedUrl(platform, url, origin = null) {
   let parsed;
   try {
     parsed = new URL(url);
@@ -405,7 +406,10 @@ export function embedUrl(platform, url) {
   }
   if (platform === "youtube" && parsed.hostname === "www.youtube.com" && parsed.pathname === "/watch") {
     const id = parsed.searchParams.get("v") ?? "";
-    return /^[\w-]{6,20}$/.test(id) ? `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&playsinline=1` : null;
+    if (!/^[\w-]{6,20}$/.test(id)) return null;
+    const params = new URLSearchParams({ autoplay: "1", rel: "0", playsinline: "1", enablejsapi: "1" });
+    if (origin) params.set("origin", origin);
+    return `https://www.youtube-nocookie.com/embed/${id}?${params}`;
   }
   return null;
 }
@@ -421,11 +425,11 @@ export function playableLinks(release) {
 }
 
 /** Ce que joue le lecteur : un titre de la sortie (`track`), ou la sortie entière sur `platform`. */
-export function playerSource(release, { platform, track }) {
+export function playerSource(release, { platform, track }, origin = null) {
   const item = track === null ? null : release.tracklist?.[track];
-  if (item) return { platform: item.platform, src: embedUrl(item.platform, item.url) };
+  if (item) return { platform: item.platform, url: item.url, src: embedUrl(item.platform, item.url, origin) };
   const link = release.links.find((candidate) => candidate.platform === platform) ?? playableLinks(release)[0];
-  return link ? { platform: link.platform, src: embedUrl(link.platform, link.url) } : null;
+  return link ? { platform: link.platform, url: link.url, src: embedUrl(link.platform, link.url, origin) } : null;
 }
 
 /** Sortie à plusieurs titres : la carte s'agrandit pour les lister. */

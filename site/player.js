@@ -142,6 +142,7 @@ export function createPlayer(host, onChange) {
     /** Charge une source { platform, src, title } ; elle démarre seule une fois prête. */
     load({ platform, src, title }) {
       stop();
+      const args = { platform, src, title };
       const iframe = Object.assign(document.createElement("iframe"), {
         src,
         title,
@@ -150,6 +151,7 @@ export function createPlayer(host, onChange) {
       });
       const dialect = DIALECTS[platform];
       const entry = {
+        args,
         platform,
         iframe,
         dialect,
@@ -187,6 +189,10 @@ export function createPlayer(host, onChange) {
       for (const message of current.dialect.seek(seconds)) send(current, message);
       current.state.position = seconds; // sans attendre la confirmation du lecteur
       notify(current);
+    },
+    /** Recharge la source en cours (après une connexion à Spotify, par exemple). */
+    reload() {
+      if (current) this.load(current.args);
     },
     stop,
     get state() {

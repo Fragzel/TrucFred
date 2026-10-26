@@ -16,6 +16,7 @@ import {
   hiddenAccounts,
   hiddenReleases,
   isNew,
+  isSpotifyPreview,
   lateSources,
   matches,
   mergeMarks,
@@ -88,6 +89,7 @@ const page = {
   open: null, // carte agrandie sur la liste de ses titres
   order: [], // identifiants des cartes affichées, dans l'ordre : ⏮ et ⏭ du lecteur
   seeking: false, // la barre de progression est en train d'être glissée
+  spotifyLogin: null, // « reconnecting » : connexion ouverte dans un onglet ; « retried » : déjà rechargé
 };
 const $ = (selector) => document.querySelector(selector);
 
@@ -678,9 +680,6 @@ function renderPlayer() {
       return button;
     }),
   );
-  const note = $("#player-note");
-  note.hidden = source.platform !== "spotify";
-  note.textContent = "Spotify : morceaux entiers si tu es connecté à open.spotify.com, sinon extraits de 30 s.";
   if (player.state?.src !== source.src) {
     player.load({ platform: source.platform, src: source.src, title: `Lecteur ${name} : ${title}` });
   }
@@ -704,11 +703,33 @@ function onPlayerChange(state) {
   $("#player-duration").textContent = clock(state.duration);
   // Lecteur muet : on le montre tel quel, avec ses propres commandes.
   $("#player-media").classList.toggle("is-native", state.failed);
+  renderSpotifyLogin(state);
   const release = page.player && findRelease(page.player.id);
   const button = release && $(`.card[data-id="${release.id}"] .play`);
   if (button) renderPlayButton(button, release);
   if (state.ended && release) playNext({ ended: true });
   document.documentElement.style.setProperty("--dock", `${$("#player").offsetHeight}px`);
+}
+
+/** Extrait de 30 s : Spotify ne reconnaît personne dans ce navigateur. Le bouton ouvre sa connexion
+ * dans un onglet ; au retour sur la page, le lecteur Spotify est rechargé avec la session. */
+function renderSpotifyLogin(state) {
+  const release = page.player && findRelease(page.player.id);
+  const track = release && page.player.track !== null ? release.tracklist?.[page.player.track] : null;
+  const preview = isSpotifyPreview(state, track);
+  $("#player-login").hidden = !preview;
+  const note = $("#player-note");
+  note.hidden = !preview;
+  note.textContent =
+    page.spotifyLogin === "retried"
+      ? "Toujours un extrait : es-tu bien connecté dans l'onglet Spotify ? Sinon, ce navigateur bloque ses cookies sur les autres sites."
+      : "Extrait de 30 s : Spotify ne te reconnaît pas dans ce navigateur.";
+}
+
+function onSpotifyReturn() {
+  if (document.visibilityState !== "visible" || page.spotifyLogin !== "reconnecting") return;
+  page.spotifyLogin = "retried";
+  if (player.state?.platform === "spotify") player.reload();
 }
 
 /** ▶ d'une carte : lecture, ou pause et reprise pour la sortie en cours. */
@@ -980,6 +1001,10 @@ async function main() {
   $("#list").addEventListener("click", onCardClick);
   $("#player-close").addEventListener("click", stopPlayer);
   $("#player-toggle").addEventListener("click", () => player.toggle());
+  $("#player-login").addEventListener("click", () => {
+    page.spotifyLogin = "reconnecting";
+  });
+  document.addEventListener("visibilitychange", onSpotifyReturn);
   $("#player-prev").addEventListener("click", playPrevious);
   $("#player-next").addEventListener("click", () => playNext());
   const seek = $("#player-seek");

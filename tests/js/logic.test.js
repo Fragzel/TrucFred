@@ -14,6 +14,7 @@ import {
   hiddenAccounts,
   hiddenReleases,
   isNew,
+  isSpotifyPreview,
   lateSources,
   localDay,
   matches,
@@ -353,4 +354,15 @@ test("lecture : la plateforme des titres d'abord, sinon les morceaux entiers san
   const unplayable = release({ links: [{ platform: "spotify", url: "https://evil.test/x" }] });
   assert.equal(playerSource(unplayable, { platform: null, track: null }), null);
   assert.deepEqual([formatDuration(185_000), formatDuration(61_400), formatDuration(null)], ["3:05", "1:01", ""]);
+});
+
+test("extrait Spotify : 30 s, ou plus court que le titre quand on connaît sa durée", () => {
+  const state = (platform, duration) => ({ platform, duration });
+  assert.equal(isSpotifyPreview(state("spotify", 30)), true);
+  assert.equal(isSpotifyPreview(state("spotify", 21.9)), true);
+  assert.equal(isSpotifyPreview(state("spotify", 214)), false);
+  assert.equal(isSpotifyPreview(state("spotify", 0)), false); // durée pas encore connue
+  assert.equal(isSpotifyPreview(state("soundcloud", 30)), false);
+  assert.equal(isSpotifyPreview(state("spotify", 25), { duration_ms: 26_000 }), false); // titre court
+  assert.equal(isSpotifyPreview(state("spotify", 30), { duration_ms: 185_000 }), true);
 });

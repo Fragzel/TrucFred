@@ -182,7 +182,11 @@ Un seul lecteur, le même pour Spotify, SoundCloud et YouTube, fixé en bas de l
 - **Plateformes** : SoundCloud puis YouTube passent en premier, car ils jouent les morceaux
   entiers sans compte. Une sortie présente sur plusieurs plateformes propose « Lire sur … ».
   - Spotify joue les morceaux entiers si tu es connecté à open.spotify.com dans ce navigateur,
-    sinon des extraits de 30 secondes.
+    sinon des extraits de 30 secondes. Sur un extrait (durée de 30 s environ, ou plus courte que
+    celle du titre), le lecteur propose « Se reconnecter à Spotify » : la connexion s'ouvre dans
+    un onglet, et le lecteur se recharge quand tu reviens sur la page. Si c'est toujours un
+    extrait, le navigateur bloque sans doute les cookies de Spotify sur les autres sites (Safari,
+    Firefox strict).
   - YouTube : le son seul, vidéo cachée, à ta demande (26/10). Ses règles veulent la vidéo
     visible, sur au moins 200 × 200 px : YouTube pourrait un jour bloquer la lecture intégrée
     depuis la page. Pour revenir à une vidéo visible, voir `.player-media.is-video` dans

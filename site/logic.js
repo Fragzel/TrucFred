@@ -433,6 +433,17 @@ export function playerSource(release, { platform, track }, origin = null) {
   return link ? { platform: link.platform, url: link.url, src: embedUrl(link.platform, link.url, origin) } : null;
 }
 
+/** Au-delà, un titre Spotify n'est pas un extrait (ceux-ci durent 30 secondes au plus). */
+const PREVIEW_MAX_SECONDS = 31;
+
+/** Spotify ne joue que des extraits à qui n'est pas connecté : une durée d'extrait, ou plus courte
+ * que celle du titre quand on la connaît, le trahit. */
+export function isSpotifyPreview(state, track = null) {
+  if (state?.platform !== "spotify" || !(state.duration > 0)) return false;
+  if (track?.duration_ms) return state.duration < track.duration_ms / 1000 - 2;
+  return state.duration <= PREVIEW_MAX_SECONDS;
+}
+
 /** Sortie à plusieurs titres : la carte s'agrandit pour les lister. */
 export function hasTracks(release) {
   return (release.tracklist?.length ?? 0) > 1 || (release.tracks ?? 0) > 1;

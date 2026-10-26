@@ -1004,6 +1004,19 @@ h1 {
   color: var(--muted);
 }
 
+.player-login {
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--spotify);
+  border-radius: 999px;
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.player-login[hidden] {
+  display: none;
+}
+
 .player-note[hidden] {
   display: none;
 }

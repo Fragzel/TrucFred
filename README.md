@@ -183,7 +183,10 @@ Un seul lecteur, le même pour Spotify, SoundCloud et YouTube, fixé en bas de l
   entiers sans compte. Une sortie présente sur plusieurs plateformes propose « Lire sur … ».
   - Spotify joue les morceaux entiers si tu es connecté à open.spotify.com dans ce navigateur,
     sinon des extraits de 30 secondes.
-  - YouTube exige que sa vidéo reste visible : elle remplace la pochette, sur 200 px de haut.
+  - YouTube : le son seul, vidéo cachée, à ta demande (26/10). Ses règles veulent la vidéo
+    visible, sur au moins 200 × 200 px : YouTube pourrait un jour bloquer la lecture intégrée
+    depuis la page. Pour revenir à une vidéo visible, voir `.player-media.is-video` dans
+    `site/style.css`.
 - **Comment c'est fait** (`site/player.js`) : le lecteur officiel de la plateforme est chargé dans
   une iframe, cachée sous la pochette, et piloté par messages, comme le font les bibliothèques
   officielles, mais sans charger leurs scripts : la page n'exécute que son propre code.

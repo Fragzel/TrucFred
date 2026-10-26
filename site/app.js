@@ -621,7 +621,7 @@ function render() {
 // --- Lecture -------------------------------------------------------------------------------------
 // Un seul lecteur pour les trois plateformes, en bas de l'écran et hors de la liste : changer
 // d'onglet, filtrer ou ranger une carte n'interrompt pas la musique. Le lecteur de la plateforme est
-// piloté par messages (player.js) ; seule la vidéo YouTube reste visible, YouTube l'exige.
+// piloté par messages (player.js) et caché sous la pochette, vidéo YouTube comprise.
 
 const player = createPlayer($("#player-frame"), onPlayerChange);
 const clock = (seconds) => formatDuration(seconds * 1000) || "0:00";

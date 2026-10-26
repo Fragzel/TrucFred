@@ -860,11 +860,11 @@ h1 {
   display: none;
 }
 
-/* YouTube exige que sa vidéo reste visible, sur au moins 200 px de haut. */
-.player-media.is-video {
+/* YouTube aussi : audio seul, à ta demande (ses règles veulent la vidéo visible). Le lecteur garde
+   sa taille normale, rogné sous la pochette : trop petit, il pourrait refuser de jouer. */
+.player-media.is-video iframe {
   width: 356px;
   height: 200px;
-  background: #000;
 }
 
 /* Lecteur muet (il n'a pas répondu) : montré tel quel, avec ses propres commandes. */
@@ -873,11 +873,13 @@ h1 {
   height: 166px;
 }
 
-.player-media:is(.is-video, .is-native) .player-cover {
+.player-media.is-native .player-cover {
   display: none;
 }
 
-.player-media:is(.is-video, .is-native) iframe {
+.player-media.is-native iframe {
+  width: 100%;
+  height: 100%;
   pointer-events: auto;
 }
 
@@ -1024,7 +1026,7 @@ h1 {
     height: 56px;
   }
 
-  .player-media:is(.is-video, .is-native) {
+  .player-media.is-native {
     flex-basis: 100%;
     width: 100%;
     height: auto;

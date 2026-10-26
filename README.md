@@ -177,6 +177,13 @@ Un seul lecteur, le même pour Spotify, SoundCloud et YouTube, fixé en bas de l
   ✕ pour arrêter, et une barre de progression : un clic ou un glissé saute à cet endroit.
 - **Enchaînement** : à la fin d'un titre, le lecteur passe au suivant de l'EP, puis à la sortie
   suivante de la liste affichée.
+- **Trier en écoutant** : le lecteur a ses boutons ☆ Favori, Déjà vu et Masquer. « Déjà vu » et
+  « Masquer » rangent la sortie et passent à la suivante ; « Favori » la garde et laisse jouer.
+  Chaque action s'annule depuis le message qui s'affiche.
+- **⤢ Agrandir** : la sortie en cours en plein écran (pochette, infos, titres, commandes et
+  boutons de tri), pour trier les sorties une par une. Raccourcis : espace (lecture ou pause),
+  ← → (précédent, suivant), F (favori), V (déjà vu), M (masquer), Échap (réduire). La musique
+  continue en réduisant.
 - **EP et albums** : ▶, ou le lien « N titres », agrandit la carte sur toute la largeur et liste
   ses titres. « Tout lire » part du premier ; un clic sur un titre joue ce titre.
 - **Plateformes** : SoundCloud puis YouTube passent en premier, car ils jouent les morceaux

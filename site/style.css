@@ -1021,6 +1021,203 @@ h1 {
   display: none;
 }
 
+/* Boutons de tri du lecteur : les mêmes dans le bandeau et en plein écran. */
+.player-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.player-mark {
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.player-mark[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.player-mark[hidden] {
+  display: none;
+}
+
+/* --- Lecteur agrandi : la sortie en cours en plein écran, pour trier une par une --- */
+
+.is-focus {
+  overflow: hidden;
+}
+
+.focus {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.focus[hidden] {
+  display: none;
+}
+
+.focus-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-height: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1rem 1rem 1.5rem;
+}
+
+.focus-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.focus-count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.focus-body {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(200px, min(42vh, 420px)) 1fr;
+  align-items: start;
+  gap: 1.5rem 2rem;
+}
+
+.focus-art {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--line);
+  box-shadow: 0 8px 30px rgb(0 0 0 / 30%);
+}
+
+.focus-cover {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.focus-cover[hidden],
+.focus-cover-empty[hidden],
+.focus-track[hidden],
+.focus-styles[hidden] {
+  display: none;
+}
+
+.focus-cover-empty {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: var(--muted);
+  font-size: 5rem;
+  font-weight: 700;
+}
+
+.focus-info {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.focus-info p {
+  margin: 0;
+}
+
+.focus-title {
+  margin: 0;
+  font-size: clamp(1.4rem, 3vw, 2.2rem);
+  line-height: 1.15;
+}
+
+.focus-track {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.focus-artists {
+  font-size: 1.1rem;
+}
+
+.focus-details {
+  color: var(--muted);
+}
+
+.focus-styles {
+  font-size: 0.9rem;
+}
+
+.focus-links {
+  margin-top: 0.4rem !important;
+}
+
+.focus-tracklist {
+  margin-top: 0.6rem;
+  columns: 1;
+}
+
+.focus-player {
+  display: grid;
+  gap: 0.9rem;
+  justify-items: center;
+}
+
+.focus-progress {
+  width: 100%;
+}
+
+.focus-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.focus-controls .player-button {
+  width: 3rem;
+  height: 3rem;
+  font-size: 1.1rem;
+}
+
+.focus-controls .player-toggle {
+  width: 4rem;
+  height: 4rem;
+  font-size: 1.4rem;
+}
+
+.focus-marks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.focus-marks .player-mark {
+  padding: 0.55rem 1.2rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.focus-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
 @media (max-width: 560px) {
   .card.is-open {
     flex-direction: column;
@@ -1049,5 +1246,18 @@ h1 {
 
   .player-head {
     flex-wrap: wrap;
+  }
+
+  .focus-body {
+    grid-template-columns: 1fr;
+  }
+
+  .focus-art {
+    width: min(100%, 360px);
+    justify-self: center;
+  }
+
+  .focus-help {
+    display: none; /* pas de clavier sur un téléphone */
   }
 }

@@ -89,6 +89,7 @@ const page = {
   open: null, // carte agrandie sur la liste de ses titres
   order: [], // identifiants des cartes affichées, dans l'ordre : ⏮ et ⏭ du lecteur
   seeking: false, // la barre de progression est en train d'être glissée
+  focus: false, // lecteur agrandi en plein écran
   spotifyLogin: null, // « reconnecting » : connexion ouverte dans un onglet ; « retried » : déjà rechargé
 };
 const $ = (selector) => document.querySelector(selector);
@@ -507,16 +508,7 @@ function card(release, fresh, moved) {
   const play = node.querySelector(".play");
   play.hidden = playableLinks(release).length === 0;
   renderPlayButton(play, release);
-  const links = node.querySelector(".links");
-  for (const link of release.links) {
-    const anchor = document.createElement("a");
-    Object.assign(anchor, { className: `platform platform-${link.platform}`, href: safeUrl(link.url), target: "_blank", rel: "noopener" });
-    anchor.innerHTML = ICONS[link.platform] ?? "";
-    const platform = PLATFORM_LABELS[link.platform] ?? link.platform;
-    anchor.setAttribute("aria-label", `Écouter « ${release.title} » sur ${platform}`);
-    anchor.append(document.createTextNode(platform));
-    links.append(anchor);
-  }
+  node.querySelector(".links").append(...platformLinks(release));
 
   const seen = Boolean(page.marks.seen[release.id]);
   const favorite = Boolean(page.marks.fav[release.id]);
@@ -539,33 +531,48 @@ function card(release, fresh, moved) {
   return node;
 }
 
+/** Liens vers chaque plateforme, avec son logo (cartes et lecteur agrandi). */
+function platformLinks(release) {
+  return release.links.map((link) => {
+    const anchor = document.createElement("a");
+    Object.assign(anchor, { className: `platform platform-${link.platform}`, href: safeUrl(link.url), target: "_blank", rel: "noopener" });
+    anchor.innerHTML = ICONS[link.platform] ?? "";
+    const platform = PLATFORM_LABELS[link.platform] ?? link.platform;
+    anchor.setAttribute("aria-label", `Écouter « ${release.title} » sur ${platform}`);
+    anchor.append(document.createTextNode(platform));
+    return anchor;
+  });
+}
+
 /** Carte agrandie : la liste de ses titres, chacun jouable. */
 function renderTracklist(node, release, open) {
   node.classList.toggle("is-open", open);
   const box = node.querySelector(".tracklist-box");
   box.hidden = !open;
   if (!open) return;
-  const tracks = release.tracklist ?? [];
+  box.querySelector(".tracklist").replaceChildren(...trackItems(release));
+  box.querySelector(".tracklist-empty").hidden = (release.tracklist ?? []).length > 0;
+}
+
+/** Titres d'une sortie, chacun jouable ; celui en cours est marqué. */
+function trackItems(release) {
   const current = page.player?.id === release.id ? page.player.track : null;
-  box.querySelector(".tracklist").replaceChildren(
-    ...tracks.map((track, index) => {
-      const item = document.createElement("li");
-      const button = Object.assign(document.createElement("button"), { type: "button", className: "track" });
-      button.dataset.index = String(index);
-      if (index === current) button.setAttribute("aria-current", "true");
-      button.disabled = !embedUrl(track.platform, track.url);
-      const name = Object.assign(document.createElement("span"), { className: "track-title", textContent: track.title });
-      const length = Object.assign(document.createElement("span"), {
-        className: "track-duration",
-        textContent: formatDuration(track.duration_ms),
-      });
-      button.append(name, length);
-      button.setAttribute("aria-label", `Écouter « ${track.title} »`);
-      item.append(button);
-      return item;
-    }),
-  );
-  box.querySelector(".tracklist-empty").hidden = tracks.length > 0;
+  return (release.tracklist ?? []).map((track, index) => {
+    const item = document.createElement("li");
+    const button = Object.assign(document.createElement("button"), { type: "button", className: "track" });
+    button.dataset.index = String(index);
+    if (index === current) button.setAttribute("aria-current", "true");
+    button.disabled = !embedUrl(track.platform, track.url);
+    const name = Object.assign(document.createElement("span"), { className: "track-title", textContent: track.title });
+    const length = Object.assign(document.createElement("span"), {
+      className: "track-duration",
+      textContent: formatDuration(track.duration_ms),
+    });
+    button.append(name, length);
+    button.setAttribute("aria-label", `Écouter « ${track.title} »`);
+    item.append(button);
+    return item;
+  });
 }
 
 function renderTabs() {
@@ -617,6 +624,8 @@ function render() {
       ? `Tout remettre dans « À découvrir » (${page.visible.length})`
       : `Tout marquer comme vu (${page.visible.length})`;
   renderHidden();
+  renderMarkButtons();
+  renderFocus();
 }
 
 /** Sorties masquées, et comptes masqués avant le 26/10, avec un bouton pour les réafficher. */
@@ -654,6 +663,7 @@ function renderPlayer() {
   if (!source?.src) {
     dock.hidden = true;
     player.stop();
+    closeFocus();
     document.documentElement.style.removeProperty("--dock");
     return;
   }
@@ -683,6 +693,8 @@ function renderPlayer() {
   if (player.state?.src !== source.src) {
     player.load({ platform: source.platform, src: source.src, title: `Lecteur ${name} : ${title}` });
   }
+  renderMarkButtons();
+  renderFocus();
   dock.hidden = false;
   document.documentElement.style.setProperty("--dock", `${dock.offsetHeight}px`);
 }
@@ -690,17 +702,16 @@ function renderPlayer() {
 /** État du lecteur de la plateforme : bouton lecture, barre de progression, fin du titre. */
 function onPlayerChange(state) {
   const playing = state.playing;
-  const toggle = $("#player-toggle");
-  toggle.textContent = playing ? "❚❚" : "▶";
-  toggle.setAttribute("aria-label", playing ? "Pause" : "Lecture");
-  toggle.title = toggle.getAttribute("aria-label");
-  const seek = $("#player-seek");
-  seek.disabled = !(state.duration > 0) || state.failed;
-  if (!page.seeking) {
-    seek.value = String(state.duration > 0 ? Math.round((state.position / state.duration) * 1000) : 0);
-    $("#player-position").textContent = clock(state.position);
+  for (const toggle of document.querySelectorAll('[data-player="toggle"]')) {
+    toggle.textContent = playing ? "❚❚" : "▶";
+    toggle.setAttribute("aria-label", playing ? "Pause" : "Lecture");
   }
-  $("#player-duration").textContent = clock(state.duration);
+  for (const seek of document.querySelectorAll(".player-seek")) {
+    seek.disabled = !(state.duration > 0) || state.failed;
+    if (!page.seeking) seek.value = String(state.duration > 0 ? Math.round((state.position / state.duration) * 1000) : 0);
+  }
+  if (!page.seeking) setTimes("position", state.position);
+  setTimes("duration", state.duration);
   // Lecteur muet : on le montre tel quel, avec ses propres commandes.
   $("#player-media").classList.toggle("is-native", state.failed);
   renderSpotifyLogin(state);
@@ -709,6 +720,36 @@ function onPlayerChange(state) {
   if (button) renderPlayButton(button, release);
   if (state.ended && release) playNext({ ended: true });
   document.documentElement.style.setProperty("--dock", `${$("#player").offsetHeight}px`);
+}
+
+function setTimes(kind, seconds) {
+  for (const element of document.querySelectorAll(`[data-time="${kind}"]`)) element.textContent = clock(seconds);
+}
+
+/** Boutons de tri du lecteur (bandeau et agrandi), d'après les marques de la sortie en cours. */
+function renderMarkButtons() {
+  const release = page.player && findRelease(page.player.id);
+  if (!release) return;
+  const favorite = Boolean(page.marks.fav[release.id]);
+  const states = {
+    fav: [favorite, favorite ? "★ Favori" : "☆ Favori"],
+    seen: [Boolean(page.marks.seen[release.id]), page.marks.seen[release.id] ? "✓ Vu" : "Déjà vu"],
+    hide: [Boolean(page.marks.hiddenReleases[release.id]), page.marks.hiddenReleases[release.id] ? "Masquée" : "Masquer"],
+  };
+  for (const button of document.querySelectorAll("[data-mark]")) {
+    const [pressed, text] = states[button.dataset.mark];
+    button.setAttribute("aria-pressed", String(pressed));
+    button.textContent = text;
+    button.hidden = favorite && button.dataset.mark !== "fav"; // un favori ne vit que dans « Favoris »
+  }
+}
+
+/** Tri depuis le lecteur : « Déjà vu » et « Masquer » rangent la sortie et passent à la suivante,
+ * « Favori » la garde et laisse la musique continuer. */
+function onTriage(kind) {
+  const release = page.player && findRelease(page.player.id);
+  if (!release || (kind !== "fav" && page.marks.fav[release.id])) return; // un favori reste un favori
+  if (markRelease(release, kind)) playNeighbour(1);
 }
 
 /** Extrait de 30 s : Spotify ne reconnaît personne dans ce navigateur. Le bouton ouvre sa connexion
@@ -720,6 +761,7 @@ function renderSpotifyLogin(state) {
   $("#player-login").hidden = !preview;
   const note = $("#player-note");
   note.hidden = !preview;
+  note.title = note.textContent;
   note.textContent =
     page.spotifyLogin === "retried"
       ? "Toujours un extrait : es-tu bien connecté dans l'onglet Spotify ? Sinon, ce navigateur bloque ses cookies sur les autres sites."
@@ -759,6 +801,82 @@ function playPrevious() {
   if ((player.state?.position ?? 0) > 3) player.seek(0);
   else if (track > 0) play(release, { track: track - 1 });
   else playNeighbour(-1);
+}
+
+// --- Lecteur agrandi ------------------------------------------------------------------------------
+// La sortie en cours en plein écran, avec ses titres et les boutons de tri : on trie les sorties une
+// par une, au clavier si l'on veut. Le bandeau reste chargé dessous : la musique ne s'arrête pas.
+
+function openFocus() {
+  page.focus = true;
+  document.body.classList.add("is-focus");
+  renderFocus();
+  $("#focus-close").focus();
+  // Vrai plein écran quand le navigateur le permet ; la page entière, pour garder le lecteur actif.
+  document.documentElement.requestFullscreen?.().catch(() => {});
+}
+
+function closeFocus() {
+  if (!page.focus) return;
+  page.focus = false;
+  document.body.classList.remove("is-focus");
+  renderFocus();
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  if (!$("#player").hidden) $("#player-expand").focus();
+}
+
+function renderFocus() {
+  const box = $("#focus");
+  const release = page.player && findRelease(page.player.id);
+  box.hidden = !page.focus || !release;
+  if (box.hidden) return;
+  const track = page.player.track === null ? null : release.tracklist?.[page.player.track];
+  const cover = $("#focus-cover");
+  cover.hidden = !release.cover;
+  if (release.cover) cover.src = safeUrl(release.cover.url);
+  const empty = $("#focus-cover-empty");
+  empty.hidden = Boolean(release.cover);
+  empty.textContent = (release.artists[0]?.name || release.title || "?").slice(0, 1).toUpperCase();
+  $("#focus-type").textContent = TYPE_LABELS[release.type] ?? release.type;
+  $("#focus-new").hidden = !isNew(release, page.now, page.data.rules, page.data.timezone);
+  $("#focus-title").textContent = release.title;
+  const current = $("#focus-track");
+  current.hidden = !track;
+  current.textContent = track ? `♪ ${track.title}` : "";
+  $("#focus-artists").textContent = release.artists.map((artist) => artist.name).join(", ");
+  const count = hasTracks(release) ? ` · ${plural(release.tracklist?.length || release.tracks, "titre")}` : "";
+  $("#focus-details").textContent = `${releaseDate(release)}${count}`;
+  const styles = $("#focus-styles");
+  styles.textContent = (release.styles ?? []).map((style) => STYLE_LABELS[style] ?? style).join(" · ");
+  styles.title = release.genres?.length ? `Genres : ${release.genres.join(", ")}` : "";
+  styles.hidden = !styles.textContent;
+  $("#focus-links").replaceChildren(...platformLinks(release));
+  $("#focus-tracklist").replaceChildren(...trackItems(release));
+  const todo = tabCounts(page.data.releases, page.marks).todo;
+  $("#focus-count").textContent = `${plural(todo, "sortie")} à découvrir`;
+}
+
+/** Raccourcis du lecteur agrandi. Ils laissent les champs tranquilles, et ne doublent pas ce que
+ * le clavier fait déjà : espace sur un bouton, flèches sur une barre de progression. */
+function onFocusKey(event) {
+  if (!page.focus || event.ctrlKey || event.metaKey || event.altKey) return;
+  const target = event.target;
+  if (target.matches?.("input:not(.player-seek), select, textarea")) return;
+  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+  if (key === " " && target.matches?.("button, a")) return;
+  if (key.startsWith("Arrow") && target.matches?.(".player-seek")) return;
+  const action = {
+    " ": () => player.toggle(),
+    ArrowRight: () => playNext(),
+    ArrowLeft: playPrevious,
+    f: () => onTriage("fav"),
+    v: () => onTriage("seen"),
+    m: () => onTriage("hide"),
+    Escape: closeFocus,
+  }[key];
+  if (!action) return;
+  event.preventDefault();
+  action();
 }
 
 /** Sortie précédente ou suivante parmi les cartes affichées. */
@@ -852,28 +970,34 @@ function onCardClick(event) {
     onPlayClick(button, release);
     return;
   }
-  if (button.classList.contains("mark-hide")) {
+  const kind = button.classList.contains("mark-hide") ? "hide" : button.classList.contains("mark-fav") ? "fav" : "seen";
+  markRelease(release, kind);
+}
+
+/** Favori, déjà vu ou masquée (ou l'inverse) ; true si la sortie vient d'être rangée hors de la
+ * liste (vue ou masquée). La carte reste à sa place jusqu'au prochain onglet ou filtre. */
+function markRelease(release, kind) {
+  page.kept.add(release.id);
+  if (kind === "hide") {
     const marks = toggleHiddenRelease(page.marks, release, new Date());
-    const message = marks.hiddenReleases[release.id] ? "masquée" : "réaffichée";
-    page.kept.add(release.id);
-    applyMarks(marks, `« ${release.title} » ${message}.`);
-    return;
+    const hidden = Boolean(marks.hiddenReleases[release.id]);
+    applyMarks(marks, `« ${release.title} » ${hidden ? "masquée" : "réaffichée"}.`);
+    return hidden;
   }
-  if (button.classList.contains("mark-fav")) {
+  if (kind === "fav") {
     const { archived, ...snapshot } = release;
     const marks = toggleFavorite(page.marks, snapshot, new Date());
     const destination = { todo: "« À découvrir »", seen: "« Déjà vus »" }[tabOf(release.id, marks)];
     const message = marks.fav[release.id]
       ? `« ${release.title} » rangé dans « Favoris ».`
       : `« ${release.title} » retiré des favoris${archived ? "" : `, de retour dans ${destination}`}.`;
-    page.kept.add(release.id);
     applyMarks(marks, message);
-    return;
+    return false;
   }
   const seen = Boolean(page.marks.seen[release.id]);
   const message = seen ? `« ${release.title} » remis dans « À découvrir ».` : `« ${release.title} » rangé dans « Déjà vus ».`;
-  page.kept.add(release.id);
   applyMarks(toggleSeen(page.marks, release.id, new Date()), message);
+  return !seen;
 }
 
 function onPlayClick(button, release) {
@@ -1000,22 +1124,39 @@ async function main() {
   }
   $("#list").addEventListener("click", onCardClick);
   $("#player-close").addEventListener("click", stopPlayer);
-  $("#player-toggle").addEventListener("click", () => player.toggle());
+  $("#player-expand").addEventListener("click", openFocus);
+  $("#focus-close").addEventListener("click", closeFocus);
+  // Commandes du bandeau et du lecteur agrandi : les mêmes, repérées par data-player et data-mark.
+  document.addEventListener("click", (event) => {
+    const control = event.target.closest("[data-player], [data-mark]");
+    if (!control || !page.player || event.detail > 1) return;
+    if (control.dataset.mark) onTriage(control.dataset.mark);
+    else ({ prev: playPrevious, toggle: () => player.toggle(), next: () => playNext() })[control.dataset.player]();
+  });
+  $("#focus-tracklist").addEventListener("click", (event) => {
+    const button = event.target.closest(".track");
+    const release = button && page.player && findRelease(page.player.id);
+    if (release) play(release, { track: Number(button.dataset.index) });
+  });
+  document.addEventListener("keydown", onFocusKey);
+  document.addEventListener("fullscreenchange", () => {
+    if (!document.fullscreenElement) closeFocus(); // sortie du plein écran par le navigateur
+  });
   $("#player-login").addEventListener("click", () => {
     page.spotifyLogin = "reconnecting";
   });
   document.addEventListener("visibilitychange", onSpotifyReturn);
-  $("#player-prev").addEventListener("click", playPrevious);
-  $("#player-next").addEventListener("click", () => playNext());
-  const seek = $("#player-seek");
-  // Pendant qu'on glisse, la barre suit le doigt ; le lecteur ne saute qu'au lâcher.
-  seek.addEventListener("input", () => {
+  // Pendant qu'on glisse une barre, elle suit le doigt ; le lecteur ne saute qu'au lâcher.
+  const seekTarget = (seek) => (Number(seek.value) / 1000) * (player.state?.duration ?? 0);
+  document.addEventListener("input", (event) => {
+    if (!event.target.matches(".player-seek")) return;
     page.seeking = true;
-    $("#player-position").textContent = clock((Number(seek.value) / 1000) * (player.state?.duration ?? 0));
+    setTimes("position", seekTarget(event.target));
   });
-  seek.addEventListener("change", () => {
+  document.addEventListener("change", (event) => {
+    if (!event.target.matches(".player-seek")) return;
     page.seeking = false;
-    player.seek((Number(seek.value) / 1000) * (player.state?.duration ?? 0));
+    player.seek(seekTarget(event.target));
   });
   $("#player-platforms").addEventListener("click", (event) => {
     const button = event.target.closest(".player-platform");

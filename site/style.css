@@ -908,8 +908,14 @@ h1 {
   border-radius: 12px;
 }
 
+/* SoundCloud : sa forme d'onde, cliquable, sert à naviguer dans le morceau ; on la veut large. */
+.player-frame[data-platform="soundcloud"] {
+  flex-basis: 30rem;
+  max-width: 640px;
+}
+
 .player-frame[data-platform="soundcloud"] iframe {
-  height: 120px;
+  height: 166px;
   border-radius: 0;
 }
 
@@ -953,8 +959,13 @@ h1 {
   }
 
   .player-frame,
-  .player-frame[data-platform="youtube"] {
+  .player-frame[data-platform="youtube"],
+  .player-frame[data-platform="soundcloud"] {
     flex-basis: 100%;
     max-width: none;
+  }
+
+  .player-frame[data-platform="soundcloud"] iframe {
+    height: 130px;
   }
 }

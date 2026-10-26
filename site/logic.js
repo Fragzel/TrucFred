@@ -399,6 +399,7 @@ export function embedUrl(platform, url) {
       show_comments: "false",
       show_reposts: "false",
       show_teaser: "false",
+      show_artwork: "false", // la pochette est déjà dans le lecteur : toute la largeur pour l'onde
     });
     return `https://w.soundcloud.com/player/?${params}`;
   }

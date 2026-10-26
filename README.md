@@ -182,6 +182,11 @@ l'étoile renvoie la sortie là où elle était : « Déjà vus » si elle avait
     démarre pas tout seul.
   - Les lecteurs sont des iframes : isolés de la page, ils ne peuvent rien en lire, et aucun
     script tiers n'y est chargé.
+- **Naviguer dans un morceau** : le lecteur SoundCloud affiche la forme d'onde sur toute sa
+  largeur, et un clic dessus saute à cet endroit. YouTube a sa barre de progression ; Spotify n'en
+  propose pas dans son lecteur compact. Un vrai spectre en direct est impossible : le son est
+  joué par le lecteur de la plateforme, que la page ne peut pas écouter, et Spotify a fermé son
+  API d'analyse audio fin 2024.
 - **Listes de titres** : celles des playlists SoundCloud arrivent avec elles. Spotify demande un
   appel par album : chaque run en lit 10 (`tracklist_calls` de `[spotify]`), pris sur le quota du
   jour avant les artistes, une fois pour toutes. Les EP déjà connus le 26/10 sont complétés en

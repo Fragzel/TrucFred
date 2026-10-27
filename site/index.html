@@ -113,6 +113,15 @@
               <button type="button" class="player-button" data-player="prev" aria-label="Précédent" title="Précédent">⏮</button>
               <button type="button" class="player-button player-toggle" data-player="toggle" aria-label="Lecture" title="Lecture">▶</button>
               <button type="button" class="player-button" data-player="next" aria-label="Suivant" title="Suivant">⏭</button>
+              <span class="volume">
+                <button type="button" class="player-button" data-volume="toggle" aria-label="Volume" aria-expanded="false" title="Volume">🔊</button>
+                <span class="volume-pop" hidden>
+                  <button type="button" class="volume-mute" data-volume="mute" aria-label="Couper le son" title="Couper le son">🔇</button>
+                  <input class="player-volume" type="range" min="0" max="100" step="1" value="100" aria-label="Volume">
+                  <span class="volume-value">100</span>
+                  <span class="volume-note" hidden>Spotify : règle le volume de l'appareil</span>
+                </span>
+              </span>
               <button id="player-expand" type="button" class="player-button player-window" aria-label="Agrandir le lecteur" title="Agrandir : trier les sorties une par une">⤢</button>
               <button id="player-close" type="button" class="player-button player-window" aria-label="Fermer le lecteur" title="Fermer le lecteur">✕</button>
             </div>
@@ -142,7 +151,7 @@
       <div class="focus-inner">
         <header class="focus-top">
           <p id="focus-count" class="focus-count"></p>
-          <button id="focus-close" type="button" class="player-button player-window"aria-label="Réduire le lecteur" title="Réduire (Échap)">✕</button>
+          <button id="focus-close" type="button" class="player-button player-window" aria-label="Réduire le lecteur" title="Réduire (Échap)">✕</button>
         </header>
         <div class="focus-body">
           <div class="focus-art">
@@ -170,13 +179,22 @@
             <button type="button" class="player-button" data-player="prev" aria-label="Précédent" title="Précédent (←)">⏮</button>
             <button type="button" class="player-button player-toggle" data-player="toggle" aria-label="Lecture" title="Lecture (espace)">▶</button>
             <button type="button" class="player-button" data-player="next" aria-label="Suivant" title="Suivant (→)">⏭</button>
+            <span class="volume">
+              <button type="button" class="player-button" data-volume="toggle" aria-label="Volume" aria-expanded="false" title="Volume (↑ ↓)">🔊</button>
+              <span class="volume-pop" hidden>
+                <button type="button" class="volume-mute" data-volume="mute" aria-label="Couper le son" title="Couper le son">🔇</button>
+                <input class="player-volume" type="range" min="0" max="100" step="1" value="100" aria-label="Volume">
+                <span class="volume-value">100</span>
+                <span class="volume-note" hidden>Spotify : règle le volume de l'appareil</span>
+              </span>
+            </span>
           </div>
           <p class="focus-marks">
             <button type="button" class="btn btn-tone tone-fav player-mark" data-mark="fav" aria-pressed="false" title="Favori (F)">☆ Favori</button>
             <button type="button" class="btn btn-tone tone-seen player-mark" data-mark="seen" aria-pressed="false" title="Déjà vu, et sortie suivante (V)">✓ Déjà vu</button>
             <button type="button" class="btn btn-tone tone-hide player-mark" data-mark="hide" aria-pressed="false" title="Masquer, et sortie suivante (M)">Masquer</button>
           </p>
-          <p class="focus-help">Espace : lecture ou pause · ← → : précédent, suivant · F : favori · V : déjà vu · M : masquer · Échap : réduire</p>
+          <p class="focus-help">Espace : lecture ou pause · ← → : précédent, suivant · ↑ ↓ : volume · F : favori · V : déjà vu · M : masquer · Échap : réduire</p>
         </div>
       </div>
     </section>

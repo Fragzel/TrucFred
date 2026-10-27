@@ -53,3 +53,13 @@ test("YouTube : poignée de main, informations et états du lecteur", () => {
   assert.deepEqual(seek(30), [{ event: "command", func: "seekTo", args: [30, true], id: 1, channel: "widget" }]);
   assert.equal(read("pas un message", idle), null);
 });
+
+test("volume : SoundCloud et YouTube le règlent, Spotify non (volume de l'appareil)", () => {
+  assert.deepEqual(DIALECTS.soundcloud.volume(25), [{ method: "setVolume", value: 25 }]);
+  assert.deepEqual(DIALECTS.youtube.volume(40), [
+    { event: "command", func: "unMute", args: [], id: 1, channel: "widget" },
+    { event: "command", func: "setVolume", args: [40], id: 1, channel: "widget" },
+  ]);
+  assert.equal(DIALECTS.youtube.volume(0)[0].func, "mute");
+  assert.equal(DIALECTS.spotify.volume, undefined);
+});

@@ -58,6 +58,7 @@ const EMPTY_TAB = {
 const STORAGE_KEY = "newrel.marks";
 const TOKEN_KEY = "newrel.githubToken";
 const DISPATCHED_KEY = "newrel.dispatchedAt";
+const VOLUME_KEY = "newrel.volume";
 const DISPATCH_PAUSE_MS = 30 * 60_000; // le temps que le run se lance, tourne et redéploie la page
 // Création d'un token « fine-grained » pré-remplie : seule la permission Actions (écriture).
 const TOKEN_URL = `https://github.com/settings/personal-access-tokens/new?${new URLSearchParams({
@@ -90,6 +91,7 @@ const page = {
   order: [], // identifiants des cartes affichées, dans l'ordre : ⏮ et ⏭ du lecteur
   seeking: false, // la barre de progression est en train d'être glissée
   focus: false, // lecteur agrandi, sur la moitié basse de l'écran
+  volume: { level: 100, muted: false }, // gardé dans ce navigateur
   spotifyLogin: null, // « reconnecting » : connexion ouverte dans un onglet ; « retried » : déjà rechargé
 };
 const $ = (selector) => document.querySelector(selector);
@@ -639,6 +641,8 @@ function render() {
 // piloté par messages (player.js) et caché sous la pochette, vidéo YouTube comprise.
 
 const player = createPlayer($("#player-frame"), onPlayerChange);
+page.volume = readVolume();
+player.setVolume(page.volume.muted ? 0 : page.volume.level);
 const clock = (seconds) => formatDuration(seconds * 1000) || "0:00";
 
 /** Joue une sortie, ou l'un de ses titres. Avec des titres connus, « tout » commence au premier :
@@ -725,12 +729,83 @@ function onPlayerChange(state) {
   setTimes("duration", state.duration);
   // Lecteur muet : on le montre tel quel, avec ses propres commandes.
   $("#player-media").classList.toggle("is-native", state.failed);
+  renderVolume(state);
   renderSpotifyLogin(state);
   const release = page.player && findRelease(page.player.id);
   const button = release && $(`.card[data-id="${release.id}"] .play`);
   if (button) renderPlayButton(button, release);
   if (state.ended && release) playNext({ ended: true });
   updateDockSpace();
+}
+
+// --- Volume : un bouton qui ouvre un curseur, dans le bandeau et dans le lecteur agrandi ----------
+
+function readVolume() {
+  try {
+    const saved = JSON.parse(readSetting(VOLUME_KEY));
+    const level = Math.min(100, Math.max(0, Math.round(Number(saved?.level))));
+    if (Number.isFinite(level)) return { level, muted: Boolean(saved.muted) };
+  } catch {
+    // réglage absent ou illisible : volume plein
+  }
+  return { level: 100, muted: false };
+}
+
+/** Nouveau volume (0 à 100) ou son coupé ; appliqué au lecteur et gardé dans ce navigateur. */
+function setVolume({ level = page.volume.level, muted = page.volume.muted }) {
+  page.volume = { level, muted: muted && level > 0 };
+  player.setVolume(page.volume.muted ? 0 : level);
+  writeSetting(VOLUME_KEY, JSON.stringify(page.volume));
+  renderVolume(player.state);
+}
+
+function renderVolume(state) {
+  const supported = state?.volumeSupported !== false;
+  const { level, muted } = page.volume;
+  const heard = muted ? 0 : level;
+  const icon = heard === 0 ? "🔇" : heard < 34 ? "🔈" : heard < 67 ? "🔉" : "🔊";
+  for (const button of document.querySelectorAll('[data-volume="toggle"]')) {
+    button.textContent = supported ? icon : "🔊";
+    button.setAttribute("aria-label", `Volume : ${supported ? `${heard} %` : "celui de l'appareil"}`);
+  }
+  for (const pop of document.querySelectorAll(".volume-pop")) {
+    const slider = pop.querySelector(".player-volume");
+    slider.disabled = !supported;
+    if (document.activeElement !== slider) slider.value = String(level);
+    slider.hidden = !supported;
+    pop.querySelector(".volume-value").hidden = !supported;
+    pop.querySelector(".volume-value").textContent = `${heard} %`;
+    pop.querySelector(".volume-note").hidden = supported;
+    const mute = pop.querySelector(".volume-mute");
+    mute.hidden = !supported;
+    mute.textContent = muted ? "🔊" : "🔇";
+    mute.setAttribute("aria-label", muted ? "Remettre le son" : "Couper le son");
+    mute.title = mute.getAttribute("aria-label");
+  }
+}
+
+/** Ferme les curseurs de volume ouverts ; true s'il y en avait un. */
+function closeVolume(except = null) {
+  let closed = false;
+  for (const pop of document.querySelectorAll(".volume-pop")) {
+    if (pop === except || pop.hidden) continue;
+    pop.hidden = true;
+    pop.parentElement.querySelector('[data-volume="toggle"]').setAttribute("aria-expanded", "false");
+    closed = true;
+  }
+  return closed;
+}
+
+function onVolumeClick(control) {
+  if (control.dataset.volume === "mute") {
+    setVolume({ muted: !page.volume.muted });
+    return;
+  }
+  const pop = control.parentElement.querySelector(".volume-pop");
+  closeVolume(pop);
+  pop.hidden = !pop.hidden;
+  control.setAttribute("aria-expanded", String(!pop.hidden));
+  if (!pop.hidden) pop.querySelector(".player-volume:not([hidden])")?.focus();
 }
 
 function setTimes(kind, seconds) {
@@ -884,18 +959,20 @@ function renderFocus() {
 function onFocusKey(event) {
   if (!page.focus || event.ctrlKey || event.metaKey || event.altKey) return;
   const target = event.target;
-  if (target.matches?.("input:not(.player-seek), select, textarea")) return;
+  if (target.matches?.("input:not(.player-seek, .player-volume), select, textarea")) return;
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
   if (key === " " && target.matches?.("button, a")) return;
-  if (key.startsWith("Arrow") && target.matches?.(".player-seek")) return;
+  if (key.startsWith("Arrow") && target.matches?.(".player-seek, .player-volume")) return;
   const action = {
     " ": () => player.toggle(),
     ArrowRight: () => playNext(),
     ArrowLeft: playPrevious,
+    ArrowUp: () => setVolume({ level: Math.min(100, page.volume.level + 10), muted: false }),
+    ArrowDown: () => setVolume({ level: Math.max(0, page.volume.level - 10) }),
     f: () => onTriage("fav"),
     v: () => onTriage("seen"),
     m: () => onTriage("hide"),
-    Escape: closeFocus,
+    Escape: () => closeVolume() || closeFocus(), // un curseur de volume ouvert se ferme d'abord
   }[key];
   if (!action) return;
   event.preventDefault();
@@ -1151,6 +1228,9 @@ async function main() {
   $("#focus-close").addEventListener("click", closeFocus);
   // Commandes du bandeau et du lecteur agrandi : les mêmes, repérées par data-player et data-mark.
   document.addEventListener("click", (event) => {
+    const volume = event.target.closest("[data-volume]");
+    if (volume) onVolumeClick(volume);
+    else if (!event.target.closest(".volume-pop")) closeVolume(); // clic ailleurs : le curseur se ferme
     const control = event.target.closest("[data-player], [data-mark]");
     if (!control || !page.player || event.detail > 1) return;
     if (control.dataset.mark) onTriage(control.dataset.mark);
@@ -1162,6 +1242,9 @@ async function main() {
     if (release) play(release, { track: Number(button.dataset.index) });
   });
   document.addEventListener("keydown", onFocusKey);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !page.focus) closeVolume();
+  });
   $("#player-login").addEventListener("click", () => {
     page.spotifyLogin = "reconnecting";
   });
@@ -1169,6 +1252,7 @@ async function main() {
   // Pendant qu'on glisse une barre, elle suit le doigt ; le lecteur ne saute qu'au lâcher.
   const seekTarget = (seek) => (Number(seek.value) / 1000) * (player.state?.duration ?? 0);
   document.addEventListener("input", (event) => {
+    if (event.target.matches(".player-volume")) setVolume({ level: Number(event.target.value), muted: false });
     if (!event.target.matches(".player-seek")) return;
     page.seeking = true;
     setTimes("position", seekTarget(event.target));

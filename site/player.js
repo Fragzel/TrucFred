@@ -1,7 +1,8 @@
 // Lecteur unique de la page : il pilote le lecteur intégré de la plateforme (une iframe isolée) par
 // messages, comme le font les bibliothèques officielles de Spotify, SoundCloud et YouTube, mais sans
 // charger leurs scripts dans la page. Chaque plateforme a son dialecte ; `read` le traduit en un état
-// commun : { platform, src, ready, playing, position, duration, ended, failed }, en secondes.
+// commun : { platform, src, ready, playing, position, duration, ended, failed, volumeSupported },
+// en secondes. Le volume (0 à 100) vaut pour toutes les sources : il est réappliqué à chacune.
 
 export const ORIGINS = {
   soundcloud: "https://w.soundcloud.com",
@@ -50,6 +51,7 @@ export const DIALECTS = {
     play: () => [{ method: "play" }],
     pause: () => [{ method: "pause" }],
     seek: (seconds) => [{ method: "seekTo", value: Math.round(seconds * 1000) }],
+    volume: (level) => [{ method: "setVolume", value: level }],
   },
   // iFrame API de Spotify : objets { command } envoyés, { type, payload } reçus (millisecondes).
   spotify: {
@@ -69,6 +71,7 @@ export const DIALECTS = {
     play: () => [{ command: "resume" }],
     pause: () => [{ command: "pause" }],
     seek: (seconds) => [{ command: "seek", timestamp: seconds }],
+    // Pas de volume : l'iFrame API de Spotify n'en a pas, celui de l'appareil s'applique.
   },
   // IFrame API de YouTube : le lecteur ne parle qu'après un message « listening ».
   youtube: {
@@ -90,6 +93,7 @@ export const DIALECTS = {
     play: () => [youtubeCommand("playVideo")],
     pause: () => [youtubeCommand("pauseVideo")],
     seek: (seconds) => [youtubeCommand("seekTo", [seconds, true])],
+    volume: (level) => [youtubeCommand(level > 0 ? "unMute" : "mute"), youtubeCommand("setVolume", [level])],
   },
 };
 
@@ -105,6 +109,10 @@ function parse(data) {
 /** Lecteur unique : `host` reçoit l'iframe de la source jouée, `onChange` chaque nouvel état. */
 export function createPlayer(host, onChange) {
   let current = null;
+  let volume = 100;
+  const applyVolume = (entry) => {
+    if (entry.dialect.volume && entry.state.ready) for (const message of entry.dialect.volume(volume)) send(entry, message);
+  };
 
   const send = (entry, message) =>
     entry.iframe.contentWindow?.postMessage(entry.dialect.encode(message), ORIGINS[entry.platform]);
@@ -125,6 +133,7 @@ export function createPlayer(host, onChange) {
       clearTimeout(entry.timeout);
       clearInterval(entry.hello);
       for (const message of entry.dialect.onReady) send(entry, message);
+      applyVolume(entry); // chaque nouvelle source garde le volume choisi
     }
     notify(entry);
     entry.state.ended = false;
@@ -155,7 +164,17 @@ export function createPlayer(host, onChange) {
         platform,
         iframe,
         dialect,
-        state: { platform, src, ready: false, playing: false, position: 0, duration: 0, ended: false, failed: false },
+        state: {
+          platform,
+          src,
+          ready: false,
+          playing: false,
+          position: 0,
+          duration: 0,
+          ended: false,
+          failed: false,
+          volumeSupported: Boolean(dialect.volume),
+        },
       };
       if (dialect.hello) {
         iframe.addEventListener("load", () => {
@@ -189,6 +208,11 @@ export function createPlayer(host, onChange) {
       for (const message of current.dialect.seek(seconds)) send(current, message);
       current.state.position = seconds; // sans attendre la confirmation du lecteur
       notify(current);
+    },
+    /** Volume de 0 à 100, pour la source en cours et les suivantes. */
+    setVolume(level) {
+      volume = level;
+      if (current) applyVolume(current);
     },
     /** Recharge la source en cours (après une connexion à Spotify, par exemple). */
     reload() {

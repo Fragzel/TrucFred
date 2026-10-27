@@ -1327,6 +1327,62 @@ h1 {
   display: none;
 }
 
+/* Volume : le bouton ouvre un curseur au-dessus de lui. */
+.volume {
+  position: relative;
+  display: inline-flex;
+}
+
+.volume-pop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.5rem);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-hover);
+  white-space: nowrap;
+}
+
+.volume-pop[hidden],
+.volume-pop [hidden] {
+  display: none;
+}
+
+.volume-mute {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.player-volume {
+  width: 7.5rem;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.volume-value {
+  min-width: 2.6rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.volume-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 /* Boutons de tri du lecteur : les mêmes dans le bandeau et dans le lecteur agrandi. */
 .player-marks {
   display: flex;

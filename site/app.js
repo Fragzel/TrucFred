@@ -9,32 +9,39 @@ import {
   dayToUtc,
   embedUrl,
   emptyMarks,
+  entryRelease,
   formatDuration,
   formatHash,
   groupByWeek,
   hasTracks,
   hiddenAccounts,
   hiddenReleases,
+  inPlaylist,
   isNew,
   isSpotifyPreview,
   lateSources,
   matches,
   mergeMarks,
   migrateMarks,
+  movePlaylistEntry,
   notices,
   parseHash,
   parseMarks,
   playableLinks,
   playerSource,
+  playlistEntries,
   releasesForTab,
   releasesShown,
+  removePlaylistEntry,
   spotifyPreviewCause,
   styleCounts,
   tabCounts,
   tabOf,
   toggleFavorite,
+  toggleFavoriteTrack,
   toggleHidden,
   toggleHiddenRelease,
+  togglePlaylist,
   toggleSeen,
 } from "./logic.js";
 import { createPlayer } from "./player.js";
@@ -79,14 +86,21 @@ const monthFormat = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "num
 const weekFormat = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 const stampFormat = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeStyle: "short" });
 
+// Sortie dont vient la carte d'un titre favori : « Sur l'EP « Basse saison » ».
+const ALBUM_OF = { album: "l'album", ep: "l'EP", single: "le single" };
+
 const page = {
   data: null,
+  byId: new Map(), // sorties des données, par identifiant
   filters: parseHash(location.hash),
   now: new Date(),
   marks: emptyMarks(),
   visible: [],
-  kept: new Set(), // sorties rangées ailleurs, gardées à leur place jusqu'au prochain onglet ou filtre
-  player: null, // { id, platform, track } : sortie jouée, plateforme, index du titre (null : tout)
+  kept: new Map(), // cartes rangées ailleurs, gardées à leur place jusqu'au prochain onglet ou filtre
+  // { id, platform, track, list, release } : sortie jouée, plateforme, index du titre (null : tout),
+  // entrée de la liste de lecture ({ key, index }, null hors de la liste) et la sortie elle-même.
+  player: null,
+  queue: null, // bouton qui a ouvert la liste de lecture, tant qu'elle est ouverte
   open: null, // carte agrandie sur la liste de ses titres
   order: [], // identifiants des cartes affichées, dans l'ordre : ⏮ et ⏭ du lecteur
   seeking: false, // la barre de progression est en train d'être glissée
@@ -98,6 +112,9 @@ const $ = (selector) => document.querySelector(selector);
 
 const safeUrl = (url) => (/^https:\/\//.test(url ?? "") ? url : "#");
 const plural = (count, word) => `${count} ${word}${count > 1 ? "s" : ""}`;
+/** Lettre affichée à la place d'une pochette absente. */
+const initial = (release) => (release.artists[0]?.name || release.title || "?").slice(0, 1).toUpperCase();
+const albumLine = (album) => ["Sur", ALBUM_OF[album.type], `« ${album.title} »`].filter(Boolean).join(" ");
 
 // --- Stockage des marques (un navigateur peut refuser localStorage : la page marche quand même) --
 
@@ -399,7 +416,9 @@ function renderFilters() {
   const platforms = Object.keys(PLATFORM_LABELS).filter(
     (platform) => platform in sources || releases.some((r) => r.links.some((link) => link.platform === platform)),
   );
-  const types = Object.keys(TYPE_LABELS).filter((type) => releases.some((release) => release.type === type));
+  // Les favoris comptent aussi : un titre d'EP en favori est un « Son ».
+  const all = [...releases, ...releasesForTab(releases, page.marks, "fav")];
+  const types = Object.keys(TYPE_LABELS).filter((type) => all.some((release) => release.type === type));
   renderChips($("#platforms"), "platform", platforms.map((p) => [p, PLATFORM_LABELS[p]]), page.filters.platforms);
   renderChips($("#types"), "type", types.map((t) => [t, TYPE_LABELS[t]]), page.filters.types);
   $("#q").value = page.filters.query;
@@ -473,7 +492,7 @@ function card(release, fresh, moved) {
     cover.append(image);
   } else {
     cover.classList.add("cover-empty");
-    cover.textContent = (release.artists[0]?.name || release.title || "?").slice(0, 1).toUpperCase();
+    cover.textContent = initial(release);
   }
   node.classList.toggle("is-new", fresh);
   const type = node.querySelector(".type");
@@ -488,6 +507,10 @@ function card(release, fresh, moved) {
   const artists = node.querySelector(".artists");
   artists.textContent = release.artists.map((artist) => artist.name).join(", ");
   artists.title = artists.textContent;
+  const album = node.querySelector(".album");
+  album.hidden = !release.album;
+  if (release.album) album.textContent = albumLine(release.album);
+  album.title = album.textContent;
   const styles = node.querySelector(".styles");
   styles.textContent = (release.styles ?? []).map((style) => STYLE_LABELS[style] ?? style).join(" · ");
   styles.hidden = !styles.textContent;
@@ -497,10 +520,12 @@ function card(release, fresh, moved) {
   date.dateTime = release.date;
   const open = page.open === release.id;
   if (hasTracks(release)) {
+    const starred = (release.tracklist ?? []).filter((track) => page.marks.favTracks[track.url]).length;
     const toggle = Object.assign(document.createElement("button"), {
       type: "button",
       className: "show-tracks",
-      textContent: plural(release.tracklist?.length || release.tracks, "titre"),
+      textContent: `${plural(release.tracklist?.length || release.tracks, "titre")}${starred ? ` · ★ ${starred}` : ""}`,
+      title: starred ? `${plural(starred, "titre")} en favori` : "",
     });
     toggle.setAttribute("aria-expanded", String(open));
     node.querySelector(".tracks").replaceChildren(document.createTextNode(" · "), toggle);
@@ -512,8 +537,11 @@ function card(release, fresh, moved) {
   renderPlayButton(play, release);
   node.querySelector(".links").append(...platformLinks(release));
 
+  const listButton = node.querySelector(".mark-list");
+  listButton.hidden = play.hidden;
+  renderListButton(listButton, playlistEntries(release), release.title);
   const seen = Boolean(page.marks.seen[release.id]);
-  const favorite = Boolean(page.marks.fav[release.id]);
+  const favorite = isFavorite(release);
   const seenButton = node.querySelector(".mark-seen");
   seenButton.setAttribute("aria-pressed", String(seen));
   seenButton.textContent = seen ? "✓ Vu" : "✓ Déjà vu";
@@ -531,6 +559,20 @@ function card(release, fresh, moved) {
   star.setAttribute("aria-label", `${starLabel} : ${release.title}`);
   star.title = starLabel;
   return node;
+}
+
+/** Sortie en favori ; pour la carte d'un titre d'EP, ce titre. */
+const isFavorite = (release) =>
+  Boolean(release.track ? page.marks.favTracks[release.track.url] : page.marks.fav[release.id]);
+
+/** « ＋ Liste » (carte, titre ou lecteur) : enfoncé quand tout est déjà dans la liste de lecture. */
+function renderListButton(button, entries, title, text = ["＋ Liste", "✓ Dans la liste"]) {
+  const listed = inPlaylist(page.marks, entries);
+  button.setAttribute("aria-pressed", String(listed));
+  button.textContent = text[Number(listed)];
+  const label = listed ? "Retirer de la liste de lecture" : "Ajouter à la liste de lecture";
+  button.setAttribute("aria-label", `${label} : ${title}`);
+  if (!button.matches(".player-mark")) button.title = label; // ceux du lecteur gardent leur raccourci
 }
 
 /** Liens vers chaque plateforme, avec son logo (cartes et lecteur agrandi). */
@@ -556,13 +598,13 @@ function renderTracklist(node, release, open) {
   box.querySelector(".tracklist-empty").hidden = (release.tracklist ?? []).length > 0;
 }
 
-/** Titres d'une sortie, chacun jouable ; celui en cours est marqué. */
+/** Titres d'une sortie, chacun jouable, avec son étoile et son « ＋ » pour la liste de lecture ;
+ * celui en cours est marqué. */
 function trackItems(release) {
   const current = page.player?.id === release.id ? page.player.track : null;
   return (release.tracklist ?? []).map((track, index) => {
     const item = document.createElement("li");
     const button = Object.assign(document.createElement("button"), { type: "button", className: "track" });
-    button.dataset.index = String(index);
     if (index === current) button.setAttribute("aria-current", "true");
     button.disabled = !embedUrl(track.platform, track.url);
     const name = Object.assign(document.createElement("span"), { className: "track-title", textContent: track.title });
@@ -572,7 +614,23 @@ function trackItems(release) {
     });
     button.append(name, length);
     button.setAttribute("aria-label", `Écouter « ${track.title} »`);
-    item.append(button);
+    const favorite = Boolean(page.marks.favTracks[track.url]);
+    const star = Object.assign(document.createElement("button"), {
+      type: "button",
+      className: "track-mark track-fav",
+      textContent: favorite ? "★" : "☆",
+      title: favorite ? "Retirer des favoris" : "Ajouter aux favoris",
+    });
+    star.setAttribute("aria-pressed", String(favorite));
+    star.setAttribute("aria-label", `${star.title} : ${track.title}`);
+    const add = Object.assign(document.createElement("button"), {
+      type: "button",
+      className: "track-mark track-add",
+      disabled: button.disabled,
+    });
+    renderListButton(add, playlistEntries(release, track), track.title, ["＋", "✓"]);
+    for (const control of [button, star, add]) control.dataset.index = String(index);
+    item.append(button, star, add);
     return item;
   });
 }
@@ -632,6 +690,7 @@ function render() {
   renderHidden();
   renderMarkButtons();
   renderFocus();
+  renderQueue();
 }
 
 /** Sorties masquées, et comptes masqués avant le 26/10, avec un bouton pour les réafficher. */
@@ -646,13 +705,15 @@ player.setVolume(page.volume.muted ? 0 : page.volume.level);
 const clock = (seconds) => formatDuration(seconds * 1000) || "0:00";
 
 /** Joue une sortie, ou l'un de ses titres. Avec des titres connus, « tout » commence au premier :
- * la page les enchaîne elle-même, avec une barre de progression par titre. */
-function play(release, { platform = null, track = null } = {}) {
+ * la page les enchaîne elle-même, avec une barre de progression par titre. `list` : l'entrée de la
+ * liste de lecture jouée ; on y reste tant qu'on ne change pas de sortie (ses titres s'enchaînent). */
+function play(release, { platform = null, track = null, list = null } = {}) {
   const links = playableLinks(release);
   const first = track === null && !platform && release.tracklist?.length > 1 ? 0 : track;
   const link = links.find((candidate) => candidate.platform === platform) ?? links[0];
   if (!link && first === null) return;
-  page.player = { id: release.id, platform: link?.platform ?? null, track: first };
+  const current = page.player?.id === release.id ? page.player.list : null;
+  page.player = { id: release.id, platform: link?.platform ?? null, track: first, list: list ?? current, release };
   renderPlayer();
   render();
 }
@@ -678,8 +739,9 @@ function renderPlayer() {
   const track = page.player.track === null ? null : release.tracklist[page.player.track];
   const artists = release.artists.map((artist) => artist.name).join(", ");
   const title = track ? track.title : release.title;
+  const from = track ? release.title : release.album?.title; // la sortie qui contient le titre joué
   $("#player-title").textContent = title;
-  $("#player-subtitle").textContent = track ? `${artists} · ${release.title}` : artists;
+  $("#player-subtitle").textContent = from ? `${artists} · ${from}` : artists;
   const cover = $("#player-cover");
   cover.hidden = !release.cover;
   if (release.cover) cover.src = safeUrl(release.cover.url);
@@ -812,30 +874,58 @@ function setTimes(kind, seconds) {
   for (const element of document.querySelectorAll(`[data-time="${kind}"]`)) element.textContent = clock(seconds);
 }
 
-/** Boutons de tri du lecteur (bandeau et agrandi), d'après les marques de la sortie en cours. */
+/** Titre d'EP en cours, que visent l'étoile et le « ＋ Liste » du lecteur ; null quand la sortie
+ * joue d'un bloc ou n'a qu'un titre. */
+function playingTrack(release) {
+  if (page.player.track === null || !(release.tracklist?.length > 1)) return null;
+  return release.tracklist[page.player.track] ?? null;
+}
+
+/** Ce que le lecteur ajoute à la liste de lecture : le titre en cours, sinon la sortie. */
+function playingEntries(release) {
+  const track = playingTrack(release);
+  return track ? playlistEntries(release, track) : playlistEntries(release);
+}
+
+/** Boutons de tri du lecteur (bandeau et agrandi), d'après les marques de la sortie en cours. Quand
+ * un titre d'EP joue, l'étoile et « ＋ Liste » visent ce titre. */
 function renderMarkButtons() {
   const release = page.player && findRelease(page.player.id);
   if (!release) return;
-  const favorite = Boolean(page.marks.fav[release.id]);
+  const track = playingTrack(release);
+  const starred = track ? Boolean(page.marks.favTracks[track.url]) : isFavorite(release);
+  const star = starred ? "★" : "☆";
+  // Un favori ne vit que dans « Favoris », et la carte d'un titre n'a pas d'onglet à elle.
+  const stays = Boolean(page.marks.fav[release.id] || release.track);
   const states = {
-    fav: [favorite, favorite ? "★ Favori" : "☆ Favori"],
+    fav: [starred, track ? `${star} Ce titre` : `${star} Favori`],
     seen: [Boolean(page.marks.seen[release.id]), page.marks.seen[release.id] ? "✓ Vu" : "✓ Déjà vu"],
     hide: [Boolean(page.marks.hiddenReleases[release.id]), page.marks.hiddenReleases[release.id] ? "Masquée" : "Masquer"],
   };
   for (const button of document.querySelectorAll("[data-mark]")) {
-    const [pressed, text] = states[button.dataset.mark];
+    const kind = button.dataset.mark;
+    button.hidden = stays && (kind === "seen" || kind === "hide");
+    if (kind === "list") {
+      renderListButton(button, playingEntries(release), track?.title ?? release.title);
+      continue;
+    }
+    const [pressed, text] = states[kind];
     button.setAttribute("aria-pressed", String(pressed));
     button.textContent = text;
-    button.hidden = favorite && button.dataset.mark !== "fav"; // un favori ne vit que dans « Favoris »
   }
 }
 
 /** Tri depuis le lecteur : « Déjà vu » et « Masquer » rangent la sortie et passent à la suivante,
- * « Favori » la garde et laisse la musique continuer. */
+ * « Favori » et « ＋ Liste » la gardent (ou le titre en cours) et laissent la musique continuer. */
 function onTriage(kind) {
   const release = page.player && findRelease(page.player.id);
-  if (!release || (kind !== "fav" && page.marks.fav[release.id])) return; // un favori reste un favori
-  if (markRelease(release, kind)) playNeighbour(1);
+  if (!release) return;
+  const track = playingTrack(release);
+  if (kind === "list") toggleList(playingEntries(release), track?.title ?? release.title);
+  else if (kind === "fav" && track) markTrack(release, track);
+  else if (kind === "fav") markRelease(release, kind);
+  // Un favori reste un favori, et la carte d'un titre n'a pas d'onglet où être rangée.
+  else if (!page.marks.fav[release.id] && !release.track && markRelease(release, kind)) playNeighbour(1);
 }
 
 const FIREFOX_SHIELD = "clique sur le bouclier à gauche de l'adresse et désactive la protection pour ce site";
@@ -933,24 +1023,37 @@ function renderFocus() {
   if (release.cover) cover.src = safeUrl(release.cover.url);
   const empty = $("#focus-cover-empty");
   empty.hidden = Boolean(release.cover);
-  empty.textContent = (release.artists[0]?.name || release.title || "?").slice(0, 1).toUpperCase();
+  empty.textContent = initial(release);
   $("#focus-type").textContent = TYPE_LABELS[release.type] ?? release.type;
   $("#focus-new").hidden = !isNew(release, page.now, page.data.rules, page.data.timezone);
   $("#focus-title").textContent = release.title;
+  const epStar = $("#focus-fav");
+  const epFavorite = Boolean(page.marks.fav[release.id]);
+  epStar.hidden = !playingTrack(release);
+  epStar.textContent = epFavorite ? "★" : "☆";
+  const whole = ALBUM_OF[release.type] ? `${ALBUM_OF[release.type]} entier` : "la sortie entière";
+  epStar.title = epFavorite ? `Retirer ${whole} des favoris` : `Ajouter ${whole} aux favoris`;
+  epStar.setAttribute("aria-pressed", String(epFavorite));
+  epStar.setAttribute("aria-label", `${epFavorite ? "Retirer des favoris" : "Ajouter aux favoris"} : ${release.title}`);
   const current = $("#focus-track");
   current.hidden = !track;
   current.textContent = track ? `♪ ${track.title}` : "";
   $("#focus-artists").textContent = release.artists.map((artist) => artist.name).join(", ");
   const count = hasTracks(release) ? ` · ${plural(release.tracklist?.length || release.tracks, "titre")}` : "";
-  $("#focus-details").textContent = `${releaseDate(release)}${count}`;
+  const from = release.album ? ` · ${albumLine(release.album)}` : "";
+  $("#focus-details").textContent = `${releaseDate(release)}${count}${from}`;
   const styles = $("#focus-styles");
   styles.textContent = (release.styles ?? []).map((style) => STYLE_LABELS[style] ?? style).join(" · ");
   styles.title = release.genres?.length ? `Genres : ${release.genres.join(", ")}` : "";
   styles.hidden = !styles.textContent;
   $("#focus-links").replaceChildren(...platformLinks(release));
   $("#focus-tracklist").replaceChildren(...trackItems(release));
+  const position = page.player.list ? listPosition() : -1;
   const todo = tabCounts(page.data.releases, page.marks).todo;
-  $("#focus-count").textContent = `${plural(todo, "sortie")} à découvrir`;
+  $("#focus-count").textContent =
+    position === -1
+      ? `${plural(todo, "sortie")} à découvrir`
+      : `Liste de lecture : ${position + 1} sur ${page.marks.playlist.length}`;
   updateDockSpace();
 }
 
@@ -970,23 +1073,170 @@ function onFocusKey(event) {
     ArrowUp: () => setVolume({ level: Math.min(100, page.volume.level + 10), muted: false }),
     ArrowDown: () => setVolume({ level: Math.max(0, page.volume.level - 10) }),
     f: () => onTriage("fav"),
+    l: () => onTriage("list"),
     v: () => onTriage("seen"),
     m: () => onTriage("hide"),
-    Escape: () => closeVolume() || closeFocus(), // un curseur de volume ouvert se ferme d'abord
+    // Un curseur de volume ouvert se ferme d'abord, puis la liste de lecture.
+    Escape: () => closeVolume() || closeQueue() || closeFocus(),
   }[key];
   if (!action) return;
   event.preventDefault();
   action();
 }
 
-/** Sortie précédente ou suivante parmi les cartes affichées. */
+/** Sortie précédente ou suivante : dans la liste de lecture quand on la lit, sinon parmi les cartes
+ * affichées. */
 function playNeighbour(step) {
+  if (page.player?.list) {
+    const index = listPosition();
+    // Entrée en cours retirée entre-temps : la suivante a pris sa place.
+    playListEntry(index === -1 ? page.player.list.index + Math.min(step, 0) : index + step);
+    return;
+  }
   const index = page.order.indexOf(page.player?.id);
   const id = page.order[index === -1 ? 0 : index + step];
   const release = id && findRelease(id);
   if (!release) return;
   if (hasTracks(release)) page.open = release.id;
   play(release);
+}
+
+// --- Liste de lecture ----------------------------------------------------------------------------
+// Une seule liste, gardée avec les marques (export, import, autres onglets). Un panneau à droite,
+// ouvert depuis le lecteur ou au-dessus des cartes : la page reste utilisable à côté.
+
+/** Place de l'entrée jouée dans la liste ; -1 si elle en a été retirée. */
+function listPosition() {
+  return page.marks.playlist.findIndex((entry) => entry.key === page.player.list.key);
+}
+
+/** Joue l'entrée `index` de la liste ; au-delà du bout, rien : la lecture s'arrête là. */
+function playListEntry(index) {
+  const entry = page.marks.playlist[index];
+  if (entry) play(entryRelease(entry, page.byId), { list: { key: entry.key, index } });
+}
+
+/** Ajoute à la liste (ou en retire, si tout y est déjà) des titres ou une sortie. */
+function toggleList(entries, title) {
+  const listed = inPlaylist(page.marks, entries);
+  const count = entries.length > 1 ? ` (${plural(entries.length, "titre")})` : "";
+  const message = `« ${title} »${count} ${listed ? "retiré de" : "ajouté à"} la liste de lecture.`;
+  applyMarks(togglePlaylist(page.marks, entries, new Date()), message);
+}
+
+function openQueue(opener) {
+  page.queue = opener;
+  renderQueue();
+  $("#queue-close").focus();
+}
+
+/** Ferme la liste de lecture et rend le focus au bouton qui l'a ouverte ; true si elle était ouverte. */
+function closeQueue() {
+  const opener = page.queue;
+  if (!opener) return false;
+  page.queue = null;
+  renderQueue();
+  if (opener.offsetParent) opener.focus(); // encore affiché (le lecteur a pu se fermer entre-temps)
+  return true;
+}
+
+/** Durée d'une liste : « 47 min », « 1 h 05 ». */
+function totalDuration(ms) {
+  const minutes = Math.round(ms / 60_000);
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;
+}
+
+function renderQueue() {
+  const { playlist } = page.marks;
+  const opened = Boolean(page.queue);
+  for (const button of document.querySelectorAll("[data-queue]")) {
+    button.setAttribute("aria-expanded", String(opened));
+    button.querySelector(".queue-count").textContent = playlist.length || "";
+    if (button.matches(".player-button")) button.setAttribute("aria-label", `Liste de lecture (${playlist.length})`);
+  }
+  document.body.classList.toggle("has-queue", opened);
+  const box = $("#queue");
+  box.hidden = !opened;
+  if (!opened) return;
+  const ms = playlist.reduce((total, entry) => total + (entry.track?.duration_ms ?? 0), 0);
+  $("#queue-summary").textContent = playlist.length
+    ? `${plural(playlist.length, "titre")}${ms ? ` · ${totalDuration(ms)}` : ""}`
+    : "";
+  $("#queue-empty").hidden = playlist.length > 0;
+  $("#queue-play").disabled = !playlist.length;
+  $("#queue-clear").disabled = !playlist.length;
+  const current = page.player?.list?.key;
+  $("#queue-list").replaceChildren(...playlist.map((entry, index) => queueItem(entry, index, entry.key === current)));
+}
+
+/** Une ligne de la liste : la jouer, la monter, la descendre ou la retirer. */
+function queueItem(entry, index, current) {
+  const release = entryRelease(entry, page.byId);
+  const item = Object.assign(document.createElement("li"), { className: "queue-item" });
+  if (current) item.setAttribute("aria-current", "true");
+  const playButton = Object.assign(document.createElement("button"), {
+    type: "button",
+    className: "queue-play",
+    disabled: playableLinks(release).length === 0,
+  });
+  playButton.setAttribute("aria-label", `Écouter « ${release.title} »`);
+  let art;
+  if (release.cover) {
+    art = Object.assign(document.createElement("img"), { src: safeUrl(release.cover.url), alt: "", loading: "lazy", width: 40, height: 40 });
+  } else {
+    art = Object.assign(document.createElement("span"), { textContent: initial(release) });
+  }
+  art.classList.add("queue-art");
+  const text = Object.assign(document.createElement("span"), { className: "queue-text" });
+  const artists = release.artists.map((artist) => artist.name).join(", ");
+  const from = release.album?.title;
+  text.append(
+    Object.assign(document.createElement("span"), { className: "queue-name", textContent: release.title }),
+    Object.assign(document.createElement("span"), { className: "queue-sub", textContent: from ? `${artists} · ${from}` : artists }),
+  );
+  const length = Object.assign(document.createElement("span"), {
+    className: "queue-duration",
+    textContent: formatDuration(entry.track?.duration_ms),
+  });
+  playButton.append(art, text, length);
+  const tool = (className, symbol, label, extra = {}) => {
+    const button = Object.assign(document.createElement("button"), { type: "button", className, textContent: symbol, title: label, ...extra });
+    button.setAttribute("aria-label", `${label} : ${release.title}`);
+    return button;
+  };
+  const up = tool("queue-tool queue-move", "↑", "Monter", { disabled: index === 0 });
+  up.dataset.step = "-1";
+  const down = tool("queue-tool queue-move", "↓", "Descendre", { disabled: index === page.marks.playlist.length - 1 });
+  down.dataset.step = "1";
+  const remove = tool("queue-tool queue-remove", "✕", "Retirer de la liste");
+  for (const button of [playButton, up, down, remove]) button.dataset.index = String(index);
+  item.append(playButton, up, down, remove);
+  return item;
+}
+
+function onQueueClick(event) {
+  const button = event.target.closest("button");
+  if (!button) return;
+  const index = Number(button.dataset.index);
+  if (button.matches(".queue-play")) {
+    playListEntry(index);
+  } else if (button.matches(".queue-move")) {
+    const step = Number(button.dataset.step);
+    applyMarks(movePlaylistEntry(page.marks, index, step));
+    // Le focus suit la ligne déplacée : on peut la monter plusieurs fois au clavier.
+    const moved = `#queue-list [data-index="${index + step}"]`;
+    ($(`${moved}.queue-move[data-step="${step}"]:not(:disabled)`) ?? $(`${moved}.queue-play`))?.focus();
+  } else if (button.matches(".queue-remove")) {
+    const { title } = entryRelease(page.marks.playlist[index], page.byId);
+    applyMarks(removePlaylistEntry(page.marks, index), `« ${title} » retiré de la liste de lecture.`);
+    ($(`#queue-list [data-index="${index}"].queue-remove`) ?? $("#queue-close")).focus();
+  }
+}
+
+function onClearQueue() {
+  const count = page.marks.playlist.length;
+  if (!count || !confirm(`Vider la liste de lecture (${plural(count, "titre")}) ?`)) return;
+  applyMarks({ ...page.marks, playlist: [] }, "Liste de lecture vidée.");
 }
 
 function renderHidden() {
@@ -1053,14 +1303,18 @@ function applyMarks(marks, message) {
   }
 }
 
+/** Sortie (ou carte d'un titre) par identifiant : dans les données, les favoris, les cartes gardées
+ * à leur place, ou celle qui joue, même retirée de la liste de lecture entre-temps. */
 function findRelease(id) {
-  return releasesForTab(page.data.releases, page.marks, "fav").find((release) => release.id === id)
-    ?? page.data.releases.find((release) => release.id === id);
+  return page.byId.get(id)
+    ?? releasesForTab(page.data.releases, page.marks, "fav").find((release) => release.id === id)
+    ?? page.kept.get(id)
+    ?? (page.player?.id === id ? page.player.release : undefined);
 }
 
 function onCardClick(event) {
   const button = event.target.closest(
-    ".mark-seen, .mark-fav, .mark-hide, .play, .play-all, .track, .show-tracks, .close-tracks",
+    ".mark-seen, .mark-fav, .mark-hide, .mark-list, .play, .play-all, .track, .track-fav, .track-add, .show-tracks, .close-tracks",
   );
   // Second clic d'un double-clic : il annulerait le premier.
   if (!button || event.detail > 1) return;
@@ -1070,14 +1324,44 @@ function onCardClick(event) {
     onPlayClick(button, release);
     return;
   }
-  const kind = button.classList.contains("mark-hide") ? "hide" : button.classList.contains("mark-fav") ? "fav" : "seen";
+  if (button.matches(".track-fav, .track-add")) {
+    onTrackMark(button, release);
+    return;
+  }
+  const kind = ["hide", "fav", "list"].find((name) => button.classList.contains(`mark-${name}`)) ?? "seen";
   markRelease(release, kind);
 }
 
-/** Favori, déjà vu ou masquée (ou l'inverse) ; true si la sortie vient d'être rangée hors de la
- * liste (vue ou masquée). La carte reste à sa place jusqu'au prochain onglet ou filtre. */
+/** Étoile ou « ＋ » d'un titre, dans une carte ouverte ou dans le lecteur agrandi. */
+function onTrackMark(button, release) {
+  const track = release.tracklist[Number(button.dataset.index)];
+  if (!track) return;
+  if (button.matches(".track-fav")) markTrack(release, track);
+  else toggleList(playlistEntries(release, track), track.title);
+}
+
+/** Un titre d'EP en favori (ou plus) : sa carte arrive dans « Favoris », l'EP reste où il est. */
+function markTrack(release, track) {
+  const marks = toggleFavoriteTrack(page.marks, release, track, new Date());
+  const message = marks.favTracks[track.url]
+    ? `« ${track.title} » rangé dans « Favoris ».`
+    : `« ${track.title} » retiré des favoris.`;
+  applyMarks(marks, message);
+}
+
+/** Favori, déjà vu, masquée ou dans la liste de lecture (ou l'inverse) ; true si la sortie vient
+ * d'être rangée hors de la liste (vue ou masquée). La carte reste à sa place jusqu'au prochain
+ * onglet ou filtre. */
 function markRelease(release, kind) {
-  page.kept.add(release.id);
+  if (kind === "list") {
+    toggleList(playlistEntries(release), release.title);
+    return false;
+  }
+  page.kept.set(release.id, release);
+  if (kind === "fav" && release.track) {
+    markTrack(release.album, release.track); // carte d'un titre d'EP
+    return false;
+  }
   if (kind === "hide") {
     const marks = toggleHiddenRelease(page.marks, release, new Date());
     const hidden = Boolean(marks.hiddenReleases[release.id]);
@@ -1143,7 +1427,7 @@ async function onImport(event) {
   event.target.value = "";
   if (!file) return;
   const imported = parseMarks(await file.text());
-  const count = [imported.seen, imported.fav, imported.hiddenReleases].reduce(
+  const count = [imported.seen, imported.fav, imported.hiddenReleases, imported.favTracks, imported.playlist].reduce(
     (total, bucket) => total + Object.keys(bucket).length,
     0,
   );
@@ -1193,6 +1477,7 @@ async function main() {
       location.reload();
     });
   }
+  page.byId = new Map(page.data.releases.map((release) => [release.id, release]));
   // Deux sorties ont pu être fusionnées depuis la dernière visite : leurs marques suivent.
   page.marks = migrateMarks(loadMarks(), page.data.aliases);
   saveMarks();
@@ -1231,19 +1516,31 @@ async function main() {
     const volume = event.target.closest("[data-volume]");
     if (volume) onVolumeClick(volume);
     else if (!event.target.closest(".volume-pop")) closeVolume(); // clic ailleurs : le curseur se ferme
+    const queue = event.target.closest("[data-queue]");
+    if (queue && !closeQueue()) openQueue(queue);
     const control = event.target.closest("[data-player], [data-mark]");
     if (!control || !page.player || event.detail > 1) return;
     if (control.dataset.mark) onTriage(control.dataset.mark);
     else ({ prev: playPrevious, toggle: () => player.toggle(), next: () => playNext() })[control.dataset.player]();
   });
   $("#focus-tracklist").addEventListener("click", (event) => {
-    const button = event.target.closest(".track");
+    const button = event.target.closest(".track, .track-fav, .track-add");
     const release = button && page.player && findRelease(page.player.id);
-    if (release) play(release, { track: Number(button.dataset.index) });
+    if (!release || event.detail > 1) return;
+    if (button.matches(".track")) play(release, { track: Number(button.dataset.index) });
+    else onTrackMark(button, release);
   });
+  $("#focus-fav").addEventListener("click", () => {
+    const release = page.player && findRelease(page.player.id);
+    if (release) markRelease(release, "fav");
+  });
+  $("#queue-close").addEventListener("click", closeQueue);
+  $("#queue-list").addEventListener("click", onQueueClick);
+  $("#queue-play").addEventListener("click", () => playListEntry(0));
+  $("#queue-clear").addEventListener("click", onClearQueue);
   document.addEventListener("keydown", onFocusKey);
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !page.focus) closeVolume();
+    if (event.key === "Escape" && !page.focus) closeVolume() || closeQueue();
   });
   $("#player-login").addEventListener("click", () => {
     page.spotifyLogin = "reconnecting";

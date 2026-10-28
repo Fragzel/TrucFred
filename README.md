@@ -156,6 +156,10 @@ Chaque onglet a sa couleur, reprise par les boutons qui y rangent une sortie : v
 - **Favoris** : l'étoile d'une carte l'ajoute aux favoris. Un favori garde une copie de la
   sortie, il reste donc visible même après sa sortie de la fenêtre de 90 jours (badge
   « Archive »).
+- **Un titre d'EP en favori** : dans la liste des titres d'un EP ou d'un album, chaque titre a sa
+  propre étoile. Le titre arrive seul dans « Favoris », sur une carte « Son » (« Sur l'EP … »),
+  et l'EP reste là où il est ; le lien « N titres » de sa carte indique combien de ses titres
+  sont en favori (« ★ 2 »).
 - **Masquer une sortie** : le lien « Masquer » d'une carte cache cette sortie seulement, des
   onglets « À découvrir » et « Déjà vus » ; les autres titres de l'artiste restent. Un favori
   n'a pas ce lien. La liste « Sorties masquées » en bas de page permet de les réafficher.
@@ -165,9 +169,10 @@ Chaque onglet a sa couleur, reprise par les boutons qui y rangent une sortie : v
   - Pour ne plus du tout collecter un compte, ni recevoir de notification à son sujet,
     ajoute-le dans `exclude`, section `[soundcloud]` de `config.toml`, ou dans `ignore` de
     `youtube.toml`.
-- **Stockage** : les marques sont enregistrées dans le navigateur (localStorage). Elles ne sont
-  pas synchronisées entre appareils, faute de serveur. Pour les transférer, utilise
-  « Exporter » puis « Importer » en bas de page. L'import fusionne sans rien effacer.
+- **Stockage** : les marques et la liste de lecture sont enregistrées dans le navigateur
+  (localStorage). Elles ne sont pas synchronisées entre appareils, faute de serveur. Pour les
+  transférer, utilise « Exporter » puis « Importer » en bas de page. L'import fusionne sans rien
+  effacer.
 - **Fusions** : quand deux sorties sont fusionnées (par exemple la même sortie trouvée sur deux
   plateformes), leurs marques suivent automatiquement, grâce aux `aliases` de `releases.json`.
 
@@ -183,14 +188,25 @@ Un seul lecteur, le même pour Spotify, SoundCloud et YouTube, fixé en bas de l
   ce navigateur et vaut pour chaque nouveau titre. Spotify ne laisse pas régler son volume depuis
   la page : c'est celui de l'appareil qui s'applique.
 - **Enchaînement** : à la fin d'un titre, le lecteur passe au suivant de l'EP, puis à la sortie
-  suivante de la liste affichée.
-- **Trier en écoutant** : le lecteur a ses boutons ☆ Favori, Déjà vu et Masquer. « Déjà vu » et
-  « Masquer » rangent la sortie et passent à la suivante ; « Favori » la garde et laisse jouer.
-  Chaque action s'annule depuis le message qui s'affiche.
+  suivante de la liste affichée (ou de la liste de lecture, quand on la lit).
+- **Trier en écoutant** : le lecteur a ses boutons ☆ Favori, ＋ Liste, Déjà vu et Masquer.
+  « Déjà vu » et « Masquer » rangent la sortie et passent à la suivante ; « Favori » et
+  « ＋ Liste » la gardent et laissent jouer. Quand un titre d'EP joue, « ☆ Ce titre » et
+  « ＋ Liste » visent ce titre seulement ; l'EP entier se met en favori avec l'étoile de sa carte,
+  ou celle à côté de son nom dans le lecteur agrandi. Chaque action s'annule depuis le message
+  qui s'affiche.
 - **⤢ Agrandir** : la sortie en cours sur la moitié basse de l'écran (pochette, infos, titres,
   commandes et boutons de tri), pour trier les sorties une par une ; la liste reste utilisable
   au-dessus. Raccourcis : espace (lecture ou pause), ← → (précédent, suivant), ↑ ↓ (volume),
-  F (favori), V (déjà vu), M (masquer), Échap (réduire). La musique continue en réduisant.
+  F (favori), L (liste de lecture), V (déjà vu), M (masquer), Échap (réduire). La musique
+  continue en réduisant.
+- **Liste de lecture** : une seule, ordonnée, gardée dans ce navigateur avec les marques (donc
+  dans l'export). On y ajoute avec « ＋ Liste » sur une carte (tous les titres d'un EP s'ils sont
+  connus, sinon la sortie entière), « ＋ » sur un titre, ou depuis le lecteur ; un second clic
+  retire. « ☰ Liste de lecture », au-dessus des cartes ou dans le lecteur, l'ouvre dans un
+  panneau à droite : ↑ ↓ pour réordonner, ✕ pour retirer, « Tout lire », « Vider ». Lancée depuis
+  ce panneau, la lecture suit la liste (⏮ ⏭ et fin de titre) et s'arrête au bout ; lancer une
+  carte de la page en sort.
 - **EP et albums** : ▶, ou le lien « N titres », agrandit la carte sur toute la largeur et liste
   ses titres. « Tout lire » part du premier ; un clic sur un titre joue ce titre.
 - **Plateformes** : SoundCloud puis YouTube passent en premier, car ils jouent les morceaux

@@ -6,6 +6,7 @@ import {
   NO_STYLE,
   embedUrl,
   emptyMarks,
+  entryRelease,
   fold,
   formatDuration,
   formatHash,
@@ -13,6 +14,7 @@ import {
   hasTracks,
   hiddenAccounts,
   hiddenReleases,
+  inPlaylist,
   isNew,
   isSpotifyPreview,
   lateSources,
@@ -20,22 +22,28 @@ import {
   matches,
   mergeMarks,
   migrateMarks,
+  movePlaylistEntry,
   notices,
   parseHash,
   parseMarks,
   playableLinks,
   playerSource,
+  playlistEntries,
   releaseWeek,
   releasesForTab,
   releasesShown,
+  removePlaylistEntry,
   spotifyPreviewCause,
   styleCounts,
   tabCounts,
   tabOf,
   toggleFavorite,
+  toggleFavoriteTrack,
   toggleHidden,
   toggleHiddenRelease,
+  togglePlaylist,
   toggleSeen,
+  trackId,
   zonedInstant,
 } from "../../site/logic.js";
 
@@ -221,7 +229,7 @@ test("sortie masquée : elle seule quitte les onglets, les autres titres de l'ar
     hiddenReleases(releases, marks).map((r) => [r.id, r.title, r.artist]),
     [["a", "Titre a", "Polyphia"], ["b", "Titre b", "Polyphia"]],
   );
-  assert.deepEqual(releasesShown(releases, marks, "todo", new Set(["a"])).map((r) => r.id), ["c", "a"]);
+  assert.deepEqual(releasesShown(releases, marks, "todo", new Map([["a", releases[0]]])).map((r) => r.id), ["c", "a"]);
   marks = toggleHiddenRelease(marks, { id: "a" }, NOW); // « Réafficher » en bas de page
   assert.deepEqual(ids("todo"), ["a", "c"]);
   assert.deepEqual(hiddenReleases([], marks), []); // sortie de la fenêtre : plus listée
@@ -386,4 +394,97 @@ test("cause d'un extrait Spotify d'après le navigateur", () => {
   assert.equal(spotifyPreviewCause(ua.android), "mobile");
   assert.equal(spotifyPreviewCause(ua.firefoxAndroid), "mobile");
   assert.equal(spotifyPreviewCause(), "cookies");
+});
+
+// --- Titres favoris et liste de lecture ------------------------------------------------------------
+
+const TRACKS = [
+  { platform: "spotify", title: "Marée basse", url: "https://open.spotify.com/track/t1", duration_ms: 214_000 },
+  { platform: "spotify", title: "Ressac", url: "https://open.spotify.com/track/t2", duration_ms: 187_000 },
+];
+const ep = release({
+  id: "ep",
+  title: "Basse saison",
+  type: "ep",
+  tracks: 2,
+  tracklist: TRACKS,
+  links: [{ platform: "spotify", url: "https://open.spotify.com/album/e1" }],
+});
+const single = release({ id: "s", links: [{ platform: "soundcloud", url: "https://soundcloud.com/nora/nuit" }] });
+const keys = (marks) => marks.playlist.map((entry) => entry.key);
+
+test("titre favori : sa propre carte dans « Favoris », l'EP reste à découvrir", () => {
+  const marks = toggleFavoriteTrack(emptyMarks(), ep, TRACKS[1], NOW);
+  assert.deepEqual(releasesForTab([ep], marks, "todo").map((r) => r.id), ["ep"]);
+  const [card] = releasesForTab([ep], marks, "fav");
+  assert.equal(card.id, trackId(TRACKS[1].url));
+  assert.deepEqual([card.type, card.title, card.album.title, card.archived], ["track", "Ressac", "Basse saison", undefined]);
+  assert.equal(card.album.tracklist, undefined); // la copie de l'EP ne garde pas ses titres
+  assert.equal(hasTracks(card), false);
+  assert.equal(playerSource(card, { platform: null, track: null }).src, "https://open.spotify.com/embed/track/t2");
+  assert.deepEqual(tabCounts([ep], marks), { todo: 1, seen: 0, fav: 1 });
+  assert.equal(matches(card, { ...noFilter, query: "basse saison" }, () => false), true); // par son EP
+  assert.equal(releasesForTab([], marks, "fav")[0].archived, true); // EP sorti de la fenêtre
+  // Retiré des favoris, il garde sa place jusqu'au prochain onglet.
+  const removed = toggleFavoriteTrack(marks, ep, TRACKS[1], NOW);
+  assert.deepEqual(removed.favTracks, {});
+  assert.deepEqual(releasesShown([ep], removed, "fav", new Map([[card.id, card]])).map((r) => r.id), [card.id]);
+});
+
+test("carte d'un titre : identifiant court, stable, propre à chaque adresse", () => {
+  assert.match(trackId(TRACKS[0].url), /^t_[0-9a-z]+$/);
+  assert.equal(trackId(TRACKS[0].url), trackId(`${TRACKS[0].url}`));
+  assert.notEqual(trackId(TRACKS[0].url), trackId(TRACKS[1].url));
+});
+
+test("liste de lecture : un titre, tous ceux d'un EP, ou la sortie entière", () => {
+  const [t1, t2] = TRACKS.map((track) => track.url);
+  let marks = togglePlaylist(emptyMarks(), playlistEntries(ep), NOW);
+  assert.deepEqual(keys(marks), [t1, t2]);
+  assert.equal(inPlaylist(marks, playlistEntries(ep, TRACKS[0])), true);
+  marks = togglePlaylist(marks, playlistEntries(single), NOW);
+  assert.deepEqual(keys(marks), [t1, t2, "release:s"]);
+  marks = togglePlaylist(marks, playlistEntries(ep, TRACKS[1]), NOW); // déjà là : retiré
+  assert.deepEqual(keys(marks), [t1, "release:s"]);
+  marks = togglePlaylist(marks, playlistEntries(ep), NOW); // seul le titre manquant revient, à la fin
+  assert.deepEqual(keys(marks), [t1, "release:s", t2]);
+  assert.equal(inPlaylist(marks, []), false);
+  marks = movePlaylistEntry(marks, 2, -1);
+  assert.deepEqual(keys(marks), [t1, t2, "release:s"]);
+  assert.equal(movePlaylistEntry(marks, 0, -1), marks); // déjà en tête
+  assert.equal(movePlaylistEntry(marks, 2, 1), marks); // déjà en bas
+  marks = removePlaylistEntry(marks, 0);
+  assert.deepEqual(keys(marks), [t2, "release:s"]);
+  // Ce que joue le lecteur : la carte du titre, ou la sortie (sa copie si elle a quitté la fenêtre).
+  const current = new Map([[ep.id, ep]]);
+  assert.deepEqual([entryRelease(marks.playlist[0], current).id, entryRelease(marks.playlist[0], current).archived], [trackId(t2), undefined]);
+  assert.deepEqual([entryRelease(marks.playlist[1], current).id, entryRelease(marks.playlist[1], current).archived], ["s", true]);
+  // La carte d'un titre favori donne son titre, rattaché à son EP.
+  const [card] = releasesForTab([ep], toggleFavoriteTrack(emptyMarks(), ep, TRACKS[0], NOW), "fav");
+  assert.deepEqual(playlistEntries(card).map((entry) => [entry.key, entry.release.id]), [[t1, "ep"]]);
+});
+
+test("marques : titres favoris et liste de lecture, lus, fusionnés et suivis", () => {
+  const before = parseMarks('{"version": 1, "seen": {}, "fav": {}, "hidden": {}, "hiddenReleases": {}}');
+  assert.deepEqual([before.favTracks, before.playlist], [{}, []]); // marques d'avant le 28/10
+  let marks = toggleFavoriteTrack(emptyMarks(), ep, TRACKS[1], NOW);
+  marks = togglePlaylist(marks, [...playlistEntries(ep), ...playlistEntries(single)], NOW);
+  assert.deepEqual(parseMarks(JSON.stringify(marks)), marks);
+  const broken = parseMarks(
+    JSON.stringify({
+      version: 1,
+      seen: {},
+      fav: {},
+      favTracks: { "https://autre": { track: TRACKS[0], release: ep }, [TRACKS[1].url]: { track: TRACKS[1] } },
+      playlist: [null, { key: "k" }, { key: "k2", track: "texte", release: single }, marks.playlist[0], marks.playlist[0]],
+    }),
+  );
+  assert.deepEqual([broken.favTracks, keys(broken)], [{}, [TRACKS[0].url]]);
+  const merged = mergeMarks(togglePlaylist(emptyMarks(), playlistEntries(single), NOW), marks);
+  assert.deepEqual(keys(merged), ["release:s", TRACKS[0].url, TRACKS[1].url]);
+  assert.deepEqual(Object.keys(merged.favTracks), [TRACKS[1].url]);
+  const migrated = migrateMarks(marks, { ep: "ep2", s: "s2" });
+  assert.equal(migrated.favTracks[TRACKS[1].url].release.id, "ep2");
+  assert.deepEqual(keys(migrated), [TRACKS[0].url, TRACKS[1].url, "release:s2"]);
+  assert.deepEqual(migrated.playlist.map((entry) => entry.release.id), ["ep2", "ep2", "s2"]);
 });

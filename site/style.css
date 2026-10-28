@@ -479,8 +479,28 @@ h1 {
   margin-top: 0.9rem;
 }
 
-.list-bar .btn {
+.list-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   margin-left: auto;
+}
+
+/* Nombre d'entrées de la liste de lecture : comme celui des onglets. */
+.queue-count {
+  min-width: 1.4rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.queue-count:empty {
+  display: none;
 }
 
 .empty {
@@ -733,6 +753,7 @@ h1 {
   position: fixed;
   bottom: calc(var(--dock, 0px) + 1rem);
   left: 50%;
+  z-index: 45; /* au-dessus du lecteur et de la liste de lecture */
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -775,6 +796,16 @@ h1 {
   overflow: hidden;
   color: var(--muted);
   font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Carte d'un titre favori : l'EP ou l'album dont il vient. */
+.album {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-style: italic;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -985,14 +1016,17 @@ h1 {
 }
 
 .tracklist li {
+  display: flex;
+  align-items: center;
   break-inside: avoid;
   counter-increment: track;
 }
 
 .track {
   display: flex;
+  flex: 1;
   gap: 0.5rem;
-  width: 100%;
+  min-width: 0;
   padding: 0.3rem 0.4rem;
   border: 0;
   border-radius: 6px;
@@ -1046,6 +1080,42 @@ h1 {
 .tracklist-empty {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+/* Étoile et « ＋ » d'un titre : discrets, en couleur une fois actifs. */
+.track-mark {
+  flex: none;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.track-mark:hover:not(:disabled) {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.track-mark:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.track-fav:hover:not(:disabled),
+.track-fav[aria-pressed="true"] {
+  color: var(--fav);
+}
+
+.track-add[aria-pressed="true"] {
+  color: var(--accent);
+  font-weight: 700;
 }
 
 /* Lecteur unique, fixé en bas de l'écran : une seule interface pour les trois plateformes. */
@@ -1212,6 +1282,28 @@ h1 {
 
 #player-expand {
   margin-left: 0.5rem;
+}
+
+/* ☰ de la liste de lecture : son nombre d'entrées en pastille. */
+.player-queue {
+  position: relative;
+}
+
+.player-queue[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.player-queue .queue-count {
+  position: absolute;
+  top: -0.4rem;
+  right: -0.4rem;
+  min-width: 1.15rem;
+  padding: 0 0.25rem;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 0.65rem;
+  line-height: 1.15rem;
 }
 
 .player-progress {
@@ -1484,10 +1576,26 @@ h1 {
   margin: 0;
 }
 
+.focus-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
 .focus-title {
   margin: 0;
   font-size: clamp(1.15rem, 2.2vw, 1.7rem);
   line-height: 1.15;
+}
+
+.focus-fav {
+  width: 2rem;
+  height: 2rem;
+  font-size: 1.2rem;
+}
+
+.focus-fav[hidden] {
+  display: none;
 }
 
 .focus-track {
@@ -1568,6 +1676,177 @@ h1 {
   text-align: center;
 }
 
+/* --- Liste de lecture : un panneau à droite, au-dessus du lecteur ; la page reste utilisable --- */
+
+.queue {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: var(--dock, 0px);
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  width: min(24rem, 100%);
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: -8px 0 30px rgb(0 0 0 / 20%);
+}
+
+.queue[hidden] {
+  display: none;
+}
+
+/* Sur un grand écran, la page se range à gauche du panneau au lieu de passer dessous. */
+@media (min-width: 72rem) {
+  body.has-queue {
+    padding-right: 24rem;
+  }
+}
+
+.queue-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 1rem 1rem 0.25rem;
+}
+
+.queue-title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.queue-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.5rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.queue-empty {
+  margin: 1.5rem 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.queue-empty[hidden] {
+  display: none;
+}
+
+.queue-list {
+  flex: 1;
+  margin: 0;
+  padding: 0.4rem 0.5rem 1rem;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  border-radius: 8px;
+}
+
+.queue-item:hover {
+  background: var(--bg);
+}
+
+.queue-item[aria-current="true"] {
+  background: var(--accent-soft);
+}
+
+.queue-play {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.35rem 0.4rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.queue-play:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.queue-art {
+  display: grid;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--line);
+  color: var(--muted);
+  font-weight: 700;
+  object-fit: cover;
+}
+
+.queue-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.queue-name,
+.queue-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-name {
+  font-size: 0.88rem;
+}
+
+.queue-item[aria-current="true"] .queue-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.queue-sub {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.queue-duration {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.queue-tool {
+  flex: none;
+  width: 1.8rem;
+  height: 1.8rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.queue-tool:hover:not(:disabled) {
+  background: var(--line);
+  color: var(--text);
+}
+
+.queue-tool:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 @media (max-width: 560px) {
   .card.is-open {
     flex-direction: column;
@@ -1631,5 +1910,10 @@ h1 {
 
   .focus-help {
     display: none; /* pas de clavier sur un téléphone */
+  }
+
+  .queue {
+    width: 100%;
+    border-left: 0;
   }
 }

@@ -145,6 +145,7 @@ export function matches(release, filters, isNewRelease) {
     [
       release.title,
       release.edition ?? "",
+      release.album?.title ?? "", // titre favori : on le retrouve aussi par le nom de son EP
       ...release.artists.map((artist) => artist.name),
       ...(release.styles ?? []).map((style) => STYLE_LABELS[style] ?? style),
       ...(release.genres ?? []),
@@ -216,22 +217,51 @@ export function formatHash(filters) {
 // export/import. Un favori garde une copie de la sortie pour survivre à la fenêtre de 90 jours.
 // `hidden` : comptes masqués avant le 26/10, quand « Masquer » cachait tout un artiste ; ils
 // restent masqués jusqu'à ce qu'on les réaffiche. Depuis, « Masquer » ne cache que la sortie.
+// Depuis le 28/10 : `favTracks`, titres d'EP en favori (par adresse du titre), et `playlist`, la
+// liste de lecture. Chaque entrée garde une copie de sa sortie, comme un favori.
 
 export const TABS = ["todo", "seen", "fav"];
 
 export function emptyMarks() {
-  return { version: 1, seen: {}, fav: {}, hidden: {}, hiddenReleases: {} };
+  return { version: 1, seen: {}, fav: {}, hidden: {}, hiddenReleases: {}, favTracks: {}, playlist: [] };
+}
+
+const isMap = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+/** Copie d'une sortie gardée avec un titre favori ou une entrée de la liste : assez pour l'afficher
+ * et la jouer. */
+const isCopy = (release) =>
+  isMap(release) && typeof release.id === "string" && typeof release.title === "string"
+  && Array.isArray(release.artists) && Array.isArray(release.links);
+const isTrack = (track) => isMap(track) && typeof track.url === "string" && typeof track.title === "string";
+
+/** Une seule entrée par clé dans la liste de lecture, la première gardée. */
+function uniqueEntries(entries) {
+  const keys = new Set();
+  return entries.filter((entry) => !keys.has(entry.key) && keys.add(entry.key));
 }
 
 /** Marques lues depuis le stockage ; un contenu absent ou abîmé donne des marques vides. */
 export function parseMarks(text) {
   try {
     const data = JSON.parse(text);
-    const isMap = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
     if (data?.version === 1 && isMap(data.seen) && isMap(data.fav)) {
       const hidden = isMap(data.hidden) ? { ...data.hidden } : {}; // absent avant le 22/10
       const hiddenReleases = isMap(data.hiddenReleases) ? { ...data.hiddenReleases } : {}; // avant le 26/10
-      return { version: 1, seen: { ...data.seen }, fav: { ...data.fav }, hidden, hiddenReleases };
+      // Absents avant le 28/10 ; une entrée abîmée est ignorée plutôt que de casser la page.
+      const favTracks = Object.fromEntries(
+        Object.entries(isMap(data.favTracks) ? data.favTracks : {}).filter(
+          ([url, entry]) => isTrack(entry?.track) && entry.track.url === url && isCopy(entry.release),
+        ),
+      );
+      const playlist = uniqueEntries(
+        (Array.isArray(data.playlist) ? data.playlist : []).filter(
+          (entry) =>
+            isMap(entry) && typeof entry.key === "string" && isCopy(entry.release)
+            && (entry.track === null || isTrack(entry.track)),
+        ),
+      );
+      return { version: 1, seen: { ...data.seen }, fav: { ...data.fav }, hidden, hiddenReleases, favTracks, playlist };
     }
   } catch {
     // contenu illisible : on repart de zéro plutôt que de bloquer la page
@@ -243,15 +273,25 @@ export function parseMarks(text) {
 export function migrateMarks(marks, aliases) {
   const move = (bucket) =>
     Object.fromEntries(Object.entries(bucket).map(([id, value]) => [aliases?.[id] ?? id, value]));
+  const renamed = (release) => ({ ...release, id: aliases?.[release.id] ?? release.id });
+  const playlist = marks.playlist.map((entry) => {
+    const release = renamed(entry.release);
+    return { ...entry, key: entry.track ? entry.key : `release:${release.id}`, release };
+  });
   return {
     ...marks,
     seen: move(marks.seen),
     fav: move(marks.fav),
     hiddenReleases: move(marks.hiddenReleases),
+    favTracks: Object.fromEntries(
+      Object.entries(marks.favTracks).map(([url, entry]) => [url, { ...entry, release: renamed(entry.release) }]),
+    ),
+    playlist: uniqueEntries(playlist),
   };
 }
 
-/** Fusionne des marques importées avec les marques existantes (rien n'est retiré). */
+/** Fusionne des marques importées avec les marques existantes (rien n'est retiré). La liste de
+ * lecture garde son ordre ; les entrées importées qui lui manquent s'ajoutent à la fin. */
 export function mergeMarks(current, imported) {
   return {
     version: 1,
@@ -259,6 +299,8 @@ export function mergeMarks(current, imported) {
     fav: { ...imported.fav, ...current.fav },
     hidden: { ...imported.hidden, ...current.hidden },
     hiddenReleases: { ...imported.hiddenReleases, ...current.hiddenReleases },
+    favTracks: { ...imported.favTracks, ...current.favTracks },
+    playlist: uniqueEntries([...current.playlist, ...imported.playlist]),
   };
 }
 
@@ -329,46 +371,147 @@ export function toggleFavorite(marks, release, now) {
   return { ...marks, fav };
 }
 
+/** Copie d'une sortie gardée avec un titre favori ou une entrée de la liste : sans ses titres, ni
+ * ce que la page lui ajoute. */
+export function releaseCopy(release) {
+  const { tracklist, archived, album, track, ...copy } = release;
+  return copy;
+}
+
+/** Empreinte courte et stable d'un texte (FNV-1a, 32 bits). */
+function shortHash(text) {
+  let hash = 0x811c9dc5;
+  for (const char of text) hash = Math.imul(hash ^ char.codePointAt(0), 0x01000193) >>> 0;
+  return hash.toString(36);
+}
+
+/** Identifiant de la carte d'un titre : dérivé de son adresse, le même d'une visite à l'autre. */
+export const trackId = (url) => `t_${shortHash(url)}`;
+
+/** Carte d'un titre d'EP (favori ou entrée de la liste) : une sortie d'un seul titre, que les cartes,
+ * les filtres et le lecteur traitent comme les autres. `album` : la sortie qui le contient, à jour
+ * si elle est encore dans les données (`current`), sinon sa copie (`archived`). */
+export function trackCard({ track, release }, current = new Map()) {
+  const live = current.get(release.id);
+  const album = live ? releaseCopy(live) : release;
+  return {
+    ...album,
+    id: trackId(track.url),
+    title: track.title,
+    edition: null,
+    type: "track",
+    type_inferred: false,
+    tracks: 1,
+    links: [{ platform: track.platform, url: track.url, type: "track", date: album.date, precision: album.precision }],
+    tracklist: [],
+    album,
+    track,
+    ...(live ? {} : { archived: true }),
+  };
+}
+
+/** Un titre d'EP en favori, ou plus : l'EP, lui, reste où il est. */
+export function toggleFavoriteTrack(marks, release, track, now) {
+  const favTracks = { ...marks.favTracks };
+  if (favTracks[track.url]) delete favTracks[track.url];
+  else favTracks[track.url] = { at: now.toISOString(), track, release: releaseCopy(release) };
+  return { ...marks, favTracks };
+}
+
 /** Onglet d'une sortie : chacune n'apparaît que dans un seul. Un favori prime sur « déjà vu ». */
 export function tabOf(id, marks) {
   if (marks.fav[id]) return "fav";
   return marks.seen[id] ? "seen" : "todo";
 }
 
-/** Sorties d'un onglet. Les favoris sortis de la fenêtre reviennent depuis leur copie.
- * Les sorties masquées disparaissent de « À découvrir » et « Déjà vus », pas des favoris. */
+/** Sorties d'un onglet. Les favoris sortis de la fenêtre reviennent depuis leur copie, et les titres
+ * favoris ont chacun leur carte. Les sorties masquées disparaissent de « À découvrir » et
+ * « Déjà vus », pas des favoris. */
 export function releasesForTab(releases, marks, tab) {
   if (tab === "fav") {
     const current = new Map(releases.map((release) => [release.id, release]));
-    return Object.entries(marks.fav).map(
-      ([id, entry]) => current.get(id) ?? { ...entry.release, id, archived: true },
-    );
+    return [
+      ...Object.entries(marks.fav).map(([id, entry]) => current.get(id) ?? { ...entry.release, id, archived: true }),
+      ...Object.values(marks.favTracks).map((entry) => trackCard(entry, current)),
+    ];
   }
   return releases.filter((release) => tabOf(release.id, marks) === tab && !isHidden(release, marks));
 }
 
 /** Sorties affichées dans un onglet : les siennes, plus celles qu'on vient d'en ranger ailleurs ou
- * de masquer (`kept`). Elles restent à leur place jusqu'au prochain changement d'onglet ou de filtre : sinon la
+ * de masquer (`kept` : identifiant → carte). Elles restent à leur place jusqu'au prochain changement d'onglet ou de filtre : sinon la
  * carte voisine, souvent du même artiste, glisse sous le pointeur et un second clic la range aussi. */
 export function releasesShown(releases, marks, tab, kept) {
   const own = releasesForTab(releases, marks, tab);
   const ids = new Set(own.map((release) => release.id));
   const known = new Map(releasesForTab(releases, marks, "fav").map((release) => [release.id, release]));
   for (const release of releases) known.set(release.id, release);
+  // Un favori retiré qui n'est plus dans les données (archive, titre d'EP) garde sa dernière carte.
   const moved = [...kept]
-    .filter((id) => !ids.has(id) && known.has(id))
-    .map((id) => known.get(id))
+    .filter(([id]) => !ids.has(id))
+    .map(([id, release]) => known.get(id) ?? release)
     .filter((release) => tab === "fav" || !hiddenAccount(release, marks));
   return [...own, ...moved];
 }
 
 export function tabCounts(releases, marks) {
-  const counts = { todo: 0, seen: 0, fav: Object.keys(marks.fav).length };
+  const counts = { todo: 0, seen: 0, fav: Object.keys(marks.fav).length + Object.keys(marks.favTracks).length };
   for (const release of releases) {
     const tab = tabOf(release.id, marks);
     if (tab !== "fav" && !isHidden(release, marks)) counts[tab] += 1;
   }
   return counts;
+}
+
+// --- Liste de lecture -----------------------------------------------------------------------------
+// Une seule liste, ordonnée, gardée avec les marques. Une entrée est un titre (clé : son adresse),
+// ou une sortie dont les titres ne sont pas connus (clé « release:<id> »), jouée d'un bloc.
+
+const trackEntry = (track, release) => ({ key: track.url, track, release: releaseCopy(release) });
+
+/** Entrées pour une sortie : le titre demandé, sinon tous ses titres s'ils sont connus, sinon la
+ * sortie entière. La carte d'un titre favori donne son titre. */
+export function playlistEntries(release, track = null) {
+  if (release.track) return [trackEntry(release.track, release.album)];
+  if (track) return [trackEntry(track, release)];
+  if (release.tracklist?.length > 1) return release.tracklist.map((item) => trackEntry(item, release));
+  return [{ key: `release:${release.id}`, track: null, release: releaseCopy(release) }];
+}
+
+/** Toutes ces entrées sont-elles dans la liste ? */
+export function inPlaylist(marks, entries) {
+  const keys = new Set(marks.playlist.map((entry) => entry.key));
+  return entries.length > 0 && entries.every((entry) => keys.has(entry.key));
+}
+
+/** Ajoute à la fin les entrées qui manquent à la liste ; si toutes y sont déjà, les retire. */
+export function togglePlaylist(marks, entries, now) {
+  if (inPlaylist(marks, entries)) {
+    const removed = new Set(entries.map((entry) => entry.key));
+    return { ...marks, playlist: marks.playlist.filter((entry) => !removed.has(entry.key)) };
+  }
+  const added = entries.map((entry) => ({ ...entry, at: now.toISOString() }));
+  return { ...marks, playlist: uniqueEntries([...marks.playlist, ...added]) };
+}
+
+/** Monte (-1) ou descend (+1) une entrée ; rien au bord de la liste. */
+export function movePlaylistEntry(marks, index, step) {
+  const target = index + step;
+  if (index < 0 || target < 0 || target >= marks.playlist.length) return marks;
+  const playlist = [...marks.playlist];
+  [playlist[index], playlist[target]] = [playlist[target], playlist[index]];
+  return { ...marks, playlist };
+}
+
+export function removePlaylistEntry(marks, index) {
+  return { ...marks, playlist: marks.playlist.filter((_, position) => position !== index) };
+}
+
+/** Ce que joue le lecteur pour une entrée : la carte du titre, ou la sortie (à jour si elle est
+ * encore dans les données, sinon sa copie). */
+export function entryRelease(entry, current = new Map()) {
+  if (entry.track) return trackCard(entry, current);
+  return current.get(entry.release.id) ?? { ...entry.release, archived: true };
 }
 
 // --- Lecture --------------------------------------------------------------------------------------

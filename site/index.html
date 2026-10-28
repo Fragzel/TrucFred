@@ -55,7 +55,10 @@
       </form>
       <div class="list-bar">
         <p id="shown" class="meta"></p>
-        <button id="mark-all" type="button" class="btn btn-tone" hidden></button>
+        <span class="list-tools">
+          <button id="mark-all" type="button" class="btn btn-tone" hidden></button>
+          <button id="queue-open" type="button" class="btn btn-tone tone-todo" data-queue="toggle" aria-controls="queue" aria-expanded="false">☰ Liste de lecture <span class="queue-count"></span></button>
+        </span>
       </div>
     </header>
 
@@ -69,7 +72,7 @@
       <section class="device" aria-labelledby="device-title">
         <h2 id="device-title">Sur cet appareil</h2>
         <div class="device-row">
-          <p>Tes marques « déjà vu » et favoris restent dans ce navigateur.</p>
+          <p>Tes marques « déjà vu », tes favoris et ta liste de lecture restent dans ce navigateur.</p>
           <p class="device-actions">
             <button id="export" type="button" class="btn btn-ghost">Exporter</button>
             <label class="btn btn-ghost import">Importer<input id="import" type="file" accept="application/json,.json"></label>
@@ -122,6 +125,7 @@
                   <span class="volume-note" hidden>Spotify : règle le volume de l'appareil</span>
                 </span>
               </span>
+              <button type="button" class="player-button player-queue" data-queue="toggle" aria-controls="queue" aria-expanded="false" aria-label="Liste de lecture" title="Liste de lecture">☰<span class="queue-count"></span></button>
               <button id="player-expand" type="button" class="player-button player-window" aria-label="Agrandir le lecteur" title="Agrandir : trier les sorties une par une">⤢</button>
               <button id="player-close" type="button" class="player-button player-window" aria-label="Fermer le lecteur" title="Fermer le lecteur">✕</button>
             </div>
@@ -134,6 +138,7 @@
           <p class="player-foot">
             <span class="player-marks">
               <button type="button" class="btn btn-tone tone-fav player-mark" data-mark="fav" aria-pressed="false">☆ Favori</button>
+              <button type="button" class="btn btn-tone tone-todo player-mark" data-mark="list" aria-pressed="false">＋ Liste</button>
               <button type="button" class="btn btn-tone tone-seen player-mark" data-mark="seen" aria-pressed="false">✓ Déjà vu</button>
               <button type="button" class="btn btn-tone tone-hide player-mark" data-mark="hide" aria-pressed="false">Masquer</button>
             </span>
@@ -160,7 +165,11 @@
           </div>
           <div class="focus-info">
             <p class="badges"><span id="focus-type" class="type"></span><span id="focus-new" class="new" hidden>Nouveau</span></p>
-            <h2 id="focus-title" class="focus-title"></h2>
+            <div class="focus-heading">
+              <h2 id="focus-title" class="focus-title"></h2>
+              <!-- Quand l'étoile du lecteur vise le titre en cours, celle-ci garde l'EP entier. -->
+              <button id="focus-fav" type="button" class="track-mark track-fav focus-fav" aria-pressed="false" hidden>☆</button>
+            </div>
             <p id="focus-track" class="focus-track" hidden></p>
             <p id="focus-artists" class="focus-artists"></p>
             <p id="focus-details" class="focus-details"></p>
@@ -188,16 +197,35 @@
                 <span class="volume-note" hidden>Spotify : règle le volume de l'appareil</span>
               </span>
             </span>
+            <button type="button" class="player-button player-queue" data-queue="toggle" aria-controls="queue" aria-expanded="false" aria-label="Liste de lecture" title="Liste de lecture">☰<span class="queue-count"></span></button>
           </div>
           <p class="focus-marks">
             <button type="button" class="btn btn-tone tone-fav player-mark" data-mark="fav" aria-pressed="false" title="Favori (F)">☆ Favori</button>
+            <button type="button" class="btn btn-tone tone-todo player-mark" data-mark="list" aria-pressed="false" title="Liste de lecture (L)">＋ Liste</button>
             <button type="button" class="btn btn-tone tone-seen player-mark" data-mark="seen" aria-pressed="false" title="Déjà vu, et sortie suivante (V)">✓ Déjà vu</button>
             <button type="button" class="btn btn-tone tone-hide player-mark" data-mark="hide" aria-pressed="false" title="Masquer, et sortie suivante (M)">Masquer</button>
           </p>
-          <p class="focus-help">Espace : lecture ou pause · ← → : précédent, suivant · ↑ ↓ : volume · F : favori · V : déjà vu · M : masquer · Échap : réduire</p>
+          <p class="focus-help">Espace : lecture ou pause · ← → : précédent, suivant · ↑ ↓ : volume · F : favori · L : liste de lecture · V : déjà vu · M : masquer · Échap : réduire</p>
         </div>
       </div>
     </section>
+
+    <!-- Liste de lecture : une seule, gardée avec les marques. Un panneau à droite, la page reste utilisable. -->
+    <aside id="queue" class="queue" aria-labelledby="queue-title" hidden>
+      <header class="queue-top">
+        <div>
+          <h2 id="queue-title" class="queue-title">Liste de lecture</h2>
+          <p id="queue-summary" class="meta"></p>
+        </div>
+        <button id="queue-close" type="button" class="player-button player-window" aria-label="Fermer la liste de lecture" title="Fermer (Échap)">✕</button>
+      </header>
+      <p class="queue-actions">
+        <button id="queue-play" type="button" class="btn btn-primary">▶ Tout lire</button>
+        <button id="queue-clear" type="button" class="btn btn-ghost">Vider</button>
+      </p>
+      <p id="queue-empty" class="queue-empty">Ajoute des titres avec ＋ : sur une carte, sur un titre d'EP ou dans le lecteur.</p>
+      <ol id="queue-list" class="queue-list"></ol>
+    </aside>
 
     <div id="toast" class="toast" role="status" hidden></div>
 
@@ -248,10 +276,12 @@
           </p>
           <h3 class="title"></h3>
           <p class="artists"></p>
+          <p class="album" hidden></p>
           <p class="styles" hidden></p>
           <p class="details"><time class="date"></time><span class="tracks"></span></p>
           <p class="links"></p>
           <p class="actions">
+            <button class="mark-list btn btn-tone tone-todo" type="button" aria-pressed="false">＋ Liste</button>
             <button class="mark-seen btn btn-tone tone-seen" type="button" aria-pressed="false">✓ Déjà vu</button>
             <button class="mark-hide btn btn-tone tone-hide" type="button">Masquer</button>
           </p>
